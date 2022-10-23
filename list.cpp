@@ -9,7 +9,7 @@
 // CONST SECTION
 // ----------------------------------------------------------------------------
 
-static const int FREE_NEXT = -1;
+static const size_t FREE_NEXT = (size_t) -1;
 
 // ----------------------------------------------------------------------------
 // STATIC DEFINITIONS
@@ -86,8 +86,10 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
     assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
 
     // Find free cell
-    ssize_t free_index = get_free_cell (list);
-    if (free_index == -1) return -1;
+    ssize_t free_index_tmp = get_free_cell (list);
+    if (free_index_tmp == -1) return -1;
+
+    size_t free_index = (size_t) free_index_tmp;
 
     // Copy data
     char *cell_data_ptr = (char *)list->data_arr +
@@ -103,7 +105,7 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
     // Update list fields
     list->size++;
 
-    return free_index;
+    return (ssize_t) free_index;
 }
 
 ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
@@ -116,13 +118,26 @@ ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
     return list::insert_after (list, list->prev_arr[index], elem);
 }
 
+ssize_t list::push_front (list_t *list, const void *elem)
+{
+    return list::insert_before (list, 0, elem);
+}
+
+ssize_t list::push_back (list_t *list, const void *elem)
+{
+    return list::insert_after (list, 0, elem);
+}
+
 // ----------------------------------------------------------------------------
 
 #define _REALLOC(ptr, size, type)                              \
 {                                                              \
     tmp_ptr = realloc (ptr, (new_capacity + 1) * size);        \
     UNWRAP_MALLOC (tmp_ptr);                                   \
+    _Pragma ("GCC diagnostic push")                            \
+    _Pragma ("GCC diagnostic ignored \"-Wuseless-cast\"")      \
     ptr = (type) tmp_ptr;                                      \
+    _Pragma ("GCC diagnostic pop")                             \
 }
 
 list::err_t list::resize (list::list_t *list, size_t new_capacity)
@@ -171,13 +186,13 @@ void list::dump (list::list_t *list)
     printf ("\tsize:      %zu\n", list->size);
 
     printf("INDX: ");
-    for (int i = 0; i <= list->capacity; ++i)
+    for (size_t i = 0; i <= list->capacity; ++i)
     {
-        printf ("%3d ", i);
+        printf ("%3zu ", i);
     }
 
     printf ("\nData: ");
-    for (int i = 0; i <= list->capacity; ++i)
+    for (size_t i = 0; i <= list->capacity; ++i)
     {
         if (list->next_arr[i] != FREE_NEXT)
         {
@@ -190,15 +205,15 @@ void list::dump (list::list_t *list)
     }
 
     printf ("\nPrev: ");
-    for (int i = 0; i <= list->capacity; ++i)
+    for (size_t i = 0; i <= list->capacity; ++i)
     {
-        printf ("%3zd ", list->prev_arr[i]);
+        printf ("%3zu ", list->prev_arr[i]);
     }
 
     printf ("\nNext: ");
-    for (int i = 0; i <= list->capacity; ++i)
+    for (size_t i = 0; i <= list->capacity; ++i)
     {
-        printf ("%3zd ", list->next_arr[i]);
+        printf ("%3zd ", (ssize_t) list->next_arr[i]);
     }
     putchar ('\n');
 }

@@ -1,8 +1,12 @@
 #include "include/common.h"
 #include "list.h"
 
+
+
 int main ()
 {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wsign-conversion"
     list::list_t list;
 
     list::ctor (&list, sizeof (int), 10);
@@ -25,7 +29,10 @@ int main ()
     q = 1;
     index = list::insert_before (&list, index, &q);
 
+    #pragma GCC diagnostic pop
+
     list::dump (&list);
 
     list::dtor (&list);
 }
+
