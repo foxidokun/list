@@ -41,6 +41,15 @@ namespace list
     [[nodiscard ("You lost your index")]]
     ssize_t push_back  (list_t *list, const void *elem);
 
+    void get (list_t *list, size_t index, void *elem);
+
+    void pop (list_t *list, size_t index, void *elem);
+    void pop_back  (list_t *list, void *elem);
+    void pop_front (list_t *list, void *elem);
+
+    size_t next (list_t *list, size_t index);
+    size_t prev (list_t *list, size_t index);
+
     err_t resize (list_t *list, size_t new_capacity);
 
     const char *err_to_str (const err_t err);

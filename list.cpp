@@ -24,6 +24,7 @@ static const size_t FREE_NEXT = (size_t) -1;
 }
 
 static ssize_t get_free_cell (list::list_t *list);
+static void release_free_cell (list::list_t *list, size_t index);
 
 // ----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS
@@ -126,6 +127,71 @@ ssize_t list::push_front (list_t *list, const void *elem)
 ssize_t list::push_back (list_t *list, const void *elem)
 {
     return list::insert_after (list, 0, elem);
+}
+
+// ----------------------------------------------------------------------------
+
+void list::get (list_t *list, size_t index, void *elem)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (elem != nullptr && "pointer can't be nullptr");
+    assert (index > 0 && "invalid (null) index");
+    assert (index <= list->capacity && "invalid index (out of bounds)");
+    assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
+
+    void *val_ptr = (char *)list->data_arr + list->obj_size * index;
+    memcpy (elem, val_ptr, list->obj_size);
+}
+
+// ----------------------------------------------------------------------------
+
+void list::pop (list_t *list, size_t index, void *elem)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (elem != nullptr && "pointer can't be nullptr");
+    assert (index > 0 && "invalid (null) index");
+    assert (index <= list->capacity && "invalid index (out of bounds)");
+    assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
+
+    list->next_arr[list->prev_arr[index]] = list->next_arr[index];
+    list->prev_arr[list->next_arr[index]] = list->prev_arr[index];
+    list::get (list, index, elem);
+}
+
+void list::pop_back (list_t *list, void *elem)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (elem != nullptr && "pointer can't be nullptr");
+
+    list::pop (list, list::next (list, 0), elem);
+}
+
+void list::pop_front (list_t *list, void *elem)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (elem != nullptr && "pointer can't be nullptr");
+
+    list::pop (list, list::prev (list, 0), elem);
+}
+
+// ----------------------------------------------------------------------------
+
+size_t list::next (list_t *list, size_t index)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (index <= list->capacity && "invalid index (out of bounds)");
+    assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
+
+    return list->next_arr[index];
+}
+
+size_t list::prev (list_t *list, size_t index)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (index <= list->capacity && "invalid index (out of bound)");
+    assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
+
+    return list->prev_arr[index];
 }
 
 // ----------------------------------------------------------------------------
@@ -265,4 +331,18 @@ static ssize_t get_free_cell (list::list_t *list)
     list->free_head = list->prev_arr[list->free_head];
     
     return (ssize_t) free_index;
+}
+
+// ----------------------------------------------------------------------------
+
+static void release_free_cell (list::list_t *list, size_t index)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (index > 0 && "invalid index (null)");
+    assert (index <= list->capacity && "invalid index (out of bounds)");
+    assert (list->next_arr[index] != FREE_NEXT && "double free");
+
+    list->next_arr[index] = FREE_NEXT;
+    list->prev_arr[index] = list->free_head;
+    list->free_head       = index;
 }
