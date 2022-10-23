@@ -1,7 +1,7 @@
 #include "include/common.h"
 #include "list.h"
 
-
+#include <stdio.h>
 
 int main ()
 {
@@ -12,7 +12,7 @@ int main ()
     list::ctor (&list, sizeof (int), 10);
 
     int q = -1;
-    size_t index = list::insert_after (&list, 0, &q);
+    size_t index = list::push_front (&list, &q);
     q = -2;
     index = list::insert_after (&list, index, &q);
     q = -3;
@@ -24,10 +24,20 @@ int main ()
     index = list::insert_after (&list, index, &q);
 
     q = 0;
-    index = list::insert_before (&list, 0, &q);
+    index = list::push_back (&list, &q);
 
     q = 1;
     index = list::insert_before (&list, index, &q);
+
+    q = -5;
+    index = list::push_front (&list, &q);
+    q = -6;
+    index = list::push_front (&list, &q);
+
+    list::dump (&list);
+
+    list::pop_back (&list, &q);
+    printf ("\nback = %d\n\n", q);
 
     #pragma GCC diagnostic pop
 
