@@ -68,7 +68,7 @@ namespace list
 
     const char *err_to_str (const err_t err);
 
-    void dump (const list_t *list);
+    void dump (const list_t *list, FILE *stream = stdout);
 }
 
 #ifndef NDEBUG
@@ -79,8 +79,9 @@ namespace list
         {                                                           \
             log(log::ERR,                                           \
                 "Invalid list with errors: ");                      \
-            list::print_errs (check_res, get_log_stream(), "->");   \
+            list::print_errs (check_res, get_log_stream(), "\t-> ");\
             list::dump (list, get_log_stream());                    \
+            fflush (get_log_stream());                              \
             assert (0 && "Invalid list");                           \
         }                                                           \
     }

@@ -74,6 +74,12 @@ void list::dtor (list_t *list)
 {
     assert (list != nullptr && "pointer can't be null");
 
+    if (list::verify (list) != list::OK)
+    {
+        log (log::WRN, "Destructing invalid list with errors\n");
+        list::print_errs (verify (list), get_log_stream(), "-->\t");
+    }
+
     free (list->data_arr);
     free (list->prev_arr);
     free (list->next_arr);
@@ -151,6 +157,7 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
+    list_assert (list);
     assert (check_index (list, index, true) && "invalid index");
 
     // Find free cell
@@ -170,9 +177,6 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
     list->prev_arr[free_index] = index;
     list->next_arr[index]      = free_index;
 
-    // Update list fields
-    list->size++;
-
     return (ssize_t) free_index;
 }
 
@@ -180,6 +184,7 @@ ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
+    list_assert (list);
     assert (check_index (list, index, true) && "invalid index");
 
     return list::insert_after (list, list->prev_arr[index], elem);
@@ -187,11 +192,19 @@ ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
 
 ssize_t list::push_front (list_t *list, const void *elem)
 {
+    assert (list != nullptr && "pointer can't be null");
+    assert (elem != nullptr && "pointer can't be null");
+    list_assert (list);
+
     return list::insert_before (list, 0, elem);
 }
 
 ssize_t list::push_back (list_t *list, const void *elem)
 {
+    assert (list != nullptr && "pointer can't be null");
+    assert (elem != nullptr && "pointer can't be null");
+    list_assert (list);
+
     return list::insert_after (list, 0, elem);
 }
 
@@ -201,6 +214,7 @@ void list::get (list_t *list, size_t index, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
+    list_assert (list);
     assert (check_index (list, index, false) && "invalid index");
 
     void *val_ptr = (char *)list->data_arr + list->obj_size * index;
@@ -213,11 +227,12 @@ void list::pop (list_t *list, size_t index, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
+    list_assert (list);
     assert (check_index (list, index, false) && "invalid index");
 
+    list::get (list, index, elem);
     list->next_arr[list->prev_arr[index]] = list->next_arr[index];
     list->prev_arr[list->next_arr[index]] = list->prev_arr[index];
-    list::get (list, index, elem);
     release_free_cell (list, index);
 }
 
@@ -225,6 +240,7 @@ void list::pop_back (list_t *list, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
+    list_assert (list);
 
     list::pop (list, list::next (list, 0), elem);
 }
@@ -233,6 +249,7 @@ void list::pop_front (list_t *list, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
+    list_assert (list);
 
     list::pop (list, list::prev (list, 0), elem);
 }
@@ -242,6 +259,7 @@ void list::pop_front (list_t *list, void *elem)
 size_t list::next (const list_t *list, size_t index)
 {
     assert (list != nullptr && "pointer can't be nullptr");
+    list_assert (list);
     assert (check_index (list, index, true) && "invalid index");
 
     return list->next_arr[index];
@@ -250,6 +268,7 @@ size_t list::next (const list_t *list, size_t index)
 size_t list::prev (const list_t *list, size_t index)
 {
     assert (list != nullptr && "pointer can't be nullptr");
+    list_assert (list);
     assert (check_index (list, index, true) && "invalid index");
 
     return list->prev_arr[index];
@@ -270,6 +289,7 @@ size_t list::prev (const list_t *list, size_t index)
 list::err_t list::resize (list::list_t *list, size_t new_capacity)
 {
     assert (list != nullptr && "poointer can't be nullptr");
+    list_assert (list);
     assert (new_capacity > list->capacity && "current implementation can't shrink");
 
     // Realocate arrays
@@ -300,47 +320,48 @@ list::err_t list::resize (list::list_t *list, size_t new_capacity)
 
 // ----------------------------------------------------------------------------
 
-void list::dump (const list::list_t *list)
+void list::dump (const list::list_t *list, FILE *stream)
 {
-    assert (list != nullptr && "pointer can't be nullptr");
+    assert (list != nullptr   && "pointer can't be nullptr");
+    assert (stream != nullptr && "pointer can't be nullptr");
 
-    printf ("List dump:\n");
+    fprintf (stream, "List dump:\n");
 
-    printf ("\tfree_head: %zu\n", list->free_head);
-    printf ("\tobj_size:  %zu\n", list->obj_size);
-    printf ("\treserved:  %zu\n", list->reserved);
-    printf ("\tcapacity:  %zu\n", list->capacity);
-    printf ("\tsize:      %zu\n", list->size);
+    fprintf (stream, "\tfree_head: %zu\n", list->free_head);
+    fprintf (stream, "\tobj_size:  %zu\n", list->obj_size);
+    fprintf (stream, "\treserved:  %zu\n", list->reserved);
+    fprintf (stream, "\tcapacity:  %zu\n", list->capacity);
+    fprintf (stream, "\tsize:      %zu\n", list->size);
 
-    printf("INDX: ");
+    fprintf(stream ,"INDX: ");
     for (size_t i = 0; i <= list->capacity; ++i)
     {
-        printf ("%3zu ", i);
+        fprintf (stream, "%3zu ", i);
     }
 
-    printf ("\nData: ");
+    fprintf (stream, "\nData: ");
     for (size_t i = 0; i <= list->capacity; ++i)
     {
         if (list->next_arr[i] != FREE_NEXT)
         {
-            printf ("%3d ", ((int *)list->data_arr)[i]);
+            fprintf (stream, "%3d ", ((int *)list->data_arr)[i]);
         }
         else
         {
-            printf ("  F ");
+            fprintf (stream, "  F ");
         }
     }
 
-    printf ("\nPrev: ");
+    fprintf (stream, "\nPrev: ");
     for (size_t i = 0; i <= list->capacity; ++i)
     {
-        printf ("%3zu ", list->prev_arr[i]);
+        fprintf (stream, "%3zu ", list->prev_arr[i]);
     }
 
-    printf ("\nNext: ");
+    fprintf (stream, "\nNext: ");
     for (size_t i = 0; i <= list->capacity; ++i)
     {
-        printf ("%3zd ", (ssize_t) list->next_arr[i]);
+        fprintf (stream, "%3zd ", (ssize_t) list->next_arr[i]);
     }
     putchar ('\n');
 }
@@ -405,7 +426,8 @@ static ssize_t get_free_cell (list::list_t *list)
     size_t free_index = list->free_head;
 
     list->free_head = list->prev_arr[list->free_head];
-    
+    list->size++;
+
     return (ssize_t) free_index;
 }
 
@@ -417,6 +439,7 @@ static void release_free_cell (list::list_t *list, size_t index)
     list->next_arr[index] = FREE_NEXT;
     list->prev_arr[index] = list->free_head;
     list->free_head       = index;
+    list->size--;
 }
 
 // ----------------------------------------------------------------------------
@@ -503,7 +526,7 @@ static void verify_data_loop  (const list::list_t *list, list::err_flags *flags)
         return;
     }
 
-    if (*flags == list::OK)
+    if (*flags == list::OK && list->size > 0)
     {
         for (size_t i = 0; i < list->size - 1; ++i)
         {
@@ -520,7 +543,7 @@ static void verify_data_loop  (const list::list_t *list, list::err_flags *flags)
         }
     }
 
-    if (index != 0)
+    if (list->next_arr[index] != 0)
     {
         log (log::ERR, "Invalid loop size, last index is %zu", index);
         *flags |= list::BROKEN_DATA_LOOP;
@@ -582,7 +605,7 @@ static void verify_free_loop  (const list::list_t *list, list::err_flags *flags)
 
     // Check loop
 
-    if (list->prev_arr[index] != 0)
+    if (index != 0)
     {
         log (log::ERR, "Broken free loop, index = %zu", index);
         *flags |= list::BROKEN_FREE_LOOP;

@@ -46,7 +46,7 @@ int main ()
 
     list::dump (&list);
 
-    list::print_errs (list::verify (&list), stdout, "->\t");
+    list::print_errs (list::verify (&list), stdout, "\t->");
 
     list::dtor (&list);
 }
