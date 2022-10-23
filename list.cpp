@@ -106,6 +106,16 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
     return free_index;
 }
 
+ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (elem != nullptr && "pointer can't be nullptr");
+    assert (index <= list->capacity && "index out of range");
+    assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
+
+    return list::insert_after (list, list->prev_arr[index], elem);
+}
+
 // ----------------------------------------------------------------------------
 
 #define _REALLOC(ptr, size, type)                              \

@@ -32,6 +32,9 @@ namespace list
     [[nodiscard ("You lost your index")]]
     ssize_t insert_after (list_t *list, size_t index, const void *elem);
 
+    [[nodiscard ("You lost your index")]]
+    ssize_t insert_before (list_t *list, size_t index, const void *elem);
+
     err_t resize (list_t *list, size_t new_capacity);
 
     const char *err_to_str (const err_t err);

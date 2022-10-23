@@ -19,6 +19,12 @@ int main ()
     q = -4;
     index = list::insert_after (&list, index, &q);
 
+    q = 0;
+    index = list::insert_before (&list, 0, &q);
+
+    q = 1;
+    index = list::insert_before (&list, index, &q);
+
     list::dump (&list);
 
     list::dtor (&list);
