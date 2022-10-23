@@ -2,9 +2,12 @@
 #include "list.h"
 
 #include <stdio.h>
+#include "lib/log.h"
 
 int main ()
 {
+    set_log_level (log::DBG);
+
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wsign-conversion"
     list::list_t list;
@@ -42,6 +45,8 @@ int main ()
     #pragma GCC diagnostic pop
 
     list::dump (&list);
+
+    list::print_errs (list::verify (&list), stdout, "->\t");
 
     list::dtor (&list);
 }

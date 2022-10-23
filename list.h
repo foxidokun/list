@@ -2,6 +2,8 @@
 #define LIST_H
 
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
 
 namespace list
 {
@@ -19,15 +21,27 @@ namespace list
         size_t size;
     };
 
+    typedef uint8_t err_flags; 
+
     enum err_t {
-        OK,
-        OOM,
-        EMPTY,
+        OK                  = 0,
+        OOM                 = 1 << 0,
+        EMPTY               = 1 << 1,
+        NULLPTR             = 1 << 2,
+        INVALID_CAPACITY    = 1 << 3,
+        INVALID_SIZE        = 1 << 4,
+        BROKEN_DATA_LOOP    = 1 << 5,
+        BROKEN_FREE_LOOP    = 1 << 6
     };
 
     err_t ctor (list_t *list, size_t obj_size, size_t reserved);
 
     void dtor (list_t *list);
+
+    [[nodiscard]]
+    err_flags verify (const list_t *list);
+
+    void print_errs (err_flags flags, FILE *file, const char *prefix);
 
     [[nodiscard ("You lost your index")]]
     ssize_t insert_after (list_t *list, size_t index, const void *elem);
@@ -47,14 +61,31 @@ namespace list
     void pop_back  (list_t *list, void *elem);
     void pop_front (list_t *list, void *elem);
 
-    size_t next (list_t *list, size_t index);
-    size_t prev (list_t *list, size_t index);
+    size_t next (const list_t *list, size_t index);
+    size_t prev (const list_t *list, size_t index);
 
     err_t resize (list_t *list, size_t new_capacity);
 
     const char *err_to_str (const err_t err);
 
-    void dump (list_t *list);
+    void dump (const list_t *list);
 }
+
+#ifndef NDEBUG
+    #define list_assert(list)                                       \
+    {                                                               \
+        err_flags check_res = list::verify (list);                  \
+        if (check_res != err_t::OK)                                 \
+        {                                                           \
+            log(log::ERR,                                           \
+                "Invalid list with errors: ");                      \
+            list::print_errs (check_res, get_log_stream(), "->");   \
+            list::dump (list, get_log_stream());                    \
+            assert (0 && "Invalid list");                           \
+        }                                                           \
+    }
+#else
+    #define list_assert(list) {;}    
+#endif
 
 #endif
