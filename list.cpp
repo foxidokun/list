@@ -1,0 +1,243 @@
+#include <assert.h>
+#include <string.h>
+
+#include "include/common.h"
+#include "lib/log.h"
+#include "list.h"
+
+// ----------------------------------------------------------------------------
+// CONST SECTION
+// ----------------------------------------------------------------------------
+
+static const int FREE_NEXT = -1;
+
+// ----------------------------------------------------------------------------
+// STATIC DEFINITIONS
+// ----------------------------------------------------------------------------
+
+#define UNWRAP_MALLOC(val)  \
+{                           \
+    if ((val) == nullptr)   \
+    {                       \
+        return list::OOM;   \
+    }                       \
+}
+
+static ssize_t get_free_cell (list::list_t *list);
+
+// ----------------------------------------------------------------------------
+// PUBLIC FUNCTIONS
+// ----------------------------------------------------------------------------
+
+list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (obj_size > 0 && "Object size can't be less than 1");
+
+    // Allocate null object + reserved
+    list->data_arr = calloc (reserved + 1, obj_size);
+    UNWRAP_MALLOC (list->data_arr);
+
+    list->prev_arr = (size_t*) calloc (reserved + 1, sizeof (size_t)); 
+    UNWRAP_MALLOC (list->prev_arr);
+
+    list->next_arr = (size_t*) calloc (reserved + 1, sizeof (size_t)); 
+    UNWRAP_MALLOC (list->next_arr);
+
+    // Init fields
+    list->obj_size = obj_size;
+    list->reserved = reserved;
+    list->capacity = reserved;
+    list->size     = 0;
+
+    // Init null cell
+    list->prev_arr[0] = 0;
+    list->next_arr[0] = 0;
+
+    // Init free cells
+    for (size_t i = 1; i <= reserved; ++i)
+    {
+        list->next_arr[i] = FREE_NEXT;
+        list->prev_arr[i] = i-1;
+    }
+    list->free_head = reserved;
+
+    return list::OK;
+}
+
+// ----------------------------------------------------------------------------
+
+void list::dtor (list_t *list)
+{
+    assert (list != nullptr && "pointer can't be null");
+
+    free (list->data_arr);
+    free (list->prev_arr);
+    free (list->next_arr);
+}
+
+// ----------------------------------------------------------------------------
+
+ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    assert (elem != nullptr && "pointer can't be nullptr");
+    assert (index <= list->capacity && "index out of range");
+    assert (list->next_arr[index] != FREE_NEXT && "invalid index: pointing to free elem");
+
+    // Find free cell
+    ssize_t free_index = get_free_cell (list);
+    if (free_index == -1) return -1;
+
+    // Copy data
+    char *cell_data_ptr = (char *)list->data_arr +
+                                free_index * list->obj_size;
+    memcpy (cell_data_ptr, elem, list->obj_size);
+
+    // Update pointers
+    list->prev_arr[list->next_arr[index]] = free_index;
+    list->next_arr[free_index] = list->next_arr[index];
+    list->prev_arr[free_index] = index;
+    list->next_arr[index]      = free_index;
+
+    // Update list fields
+    list->size++;
+
+    return free_index;
+}
+
+// ----------------------------------------------------------------------------
+
+#define _REALLOC(ptr, size, type)                              \
+{                                                              \
+    tmp_ptr = realloc (ptr, (new_capacity + 1) * size);        \
+    UNWRAP_MALLOC (tmp_ptr);                                   \
+    ptr = (type) tmp_ptr;                                      \
+}
+
+list::err_t list::resize (list::list_t *list, size_t new_capacity)
+{
+    assert (list != nullptr && "poointer can't be nullptr");
+    assert (new_capacity > list->capacity && "current implementation can't shrink");
+
+    // Realocate arrays
+    void *tmp_ptr = nullptr;
+
+    _REALLOC (list->data_arr,  list->obj_size, void   *);
+    _REALLOC (list->next_arr, sizeof (size_t), size_t *);
+    _REALLOC (list->prev_arr, sizeof (size_t), size_t *);
+
+    // Recreate free stack
+
+    list->prev_arr[list->capacity + 1] = list->free_head;
+    list->next_arr[list->capacity + 1] = FREE_NEXT;
+
+    for (size_t i = list->capacity + 2; i < new_capacity + 1; ++i)
+    {
+        list->prev_arr[i] = i - 1;
+        list->next_arr[i] = FREE_NEXT;
+    }
+
+    list->free_head = new_capacity;
+    list->capacity  = new_capacity;
+
+    return list::OK;
+}
+
+#undef _REALLOC
+
+// ----------------------------------------------------------------------------
+
+void list::dump (list::list_t *list)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+
+    printf ("List dump:\n");
+
+    printf ("\tfree_head: %zu\n", list->free_head);
+    printf ("\tobj_size:  %zu\n", list->obj_size);
+    printf ("\treserved:  %zu\n", list->reserved);
+    printf ("\tcapacity:  %zu\n", list->capacity);
+    printf ("\tsize:      %zu\n", list->size);
+
+    printf("INDX: ");
+    for (int i = 0; i <= list->capacity; ++i)
+    {
+        printf ("%3d ", i);
+    }
+
+    printf ("\nData: ");
+    for (int i = 0; i <= list->capacity; ++i)
+    {
+        if (list->next_arr[i] != FREE_NEXT)
+        {
+            printf ("%3d ", ((int *)list->data_arr)[i]);
+        }
+        else
+        {
+            printf ("  F ");
+        }
+    }
+
+    printf ("\nPrev: ");
+    for (int i = 0; i <= list->capacity; ++i)
+    {
+        printf ("%3zd ", list->prev_arr[i]);
+    }
+
+    printf ("\nNext: ");
+    for (int i = 0; i <= list->capacity; ++i)
+    {
+        printf ("%3zd ", list->next_arr[i]);
+    }
+    putchar ('\n');
+}
+
+// ----------------------------------------------------------------------------
+
+const char *list::err_to_str (const list::err_t err)
+{
+    switch (err)
+    {
+        case list::OK:
+            return "OK";
+
+        case list::OOM:
+            return "Out Of Memory";
+
+        case list::EMPTY:
+            return "List is empty";
+
+        default:
+            assert (0 && "Invalid error code");
+    }
+}
+
+// ----------------------------------------------------------------------------
+// STATIC FUNCTIONS
+// ----------------------------------------------------------------------------
+
+static ssize_t get_free_cell (list::list_t *list)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+
+    list::err_t res = list::OK;
+
+    // If we need reallocation
+    if (list->free_head == 0) 
+    {
+        res = list::resize (list, list->capacity * 2);
+
+        if (res != list::OK)
+        {
+            log (log::ERR, "Failed to reallocate with error '%s'", list::err_to_str (res));
+            return ERROR;
+        }
+    }
+
+    size_t free_index = list->free_head;
+
+    list->free_head = list->prev_arr[list->free_head];
+    
+    return (ssize_t) free_index;
+}
