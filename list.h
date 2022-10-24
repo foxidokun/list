@@ -62,6 +62,11 @@ namespace list
     size_t next (const list_t *list, size_t index);
     size_t prev (const list_t *list, size_t index);
 
+    size_t head (const list_t *list);
+    size_t tail (const list_t *list);
+
+    size_t get_iter (const list_t *list, size_t index);
+
     err_t resize (list_t *list, size_t new_capacity);
 
     const char *err_to_str (const err_t err);

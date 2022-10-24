@@ -190,7 +190,7 @@ ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
     return list::insert_after (list, list->prev_arr[index], elem);
 }
 
-ssize_t list::push_front (list_t *list, const void *elem)
+ssize_t list::push_back (list_t *list, const void *elem)
 {
     assert (list != nullptr && "pointer can't be null");
     assert (elem != nullptr && "pointer can't be null");
@@ -199,7 +199,7 @@ ssize_t list::push_front (list_t *list, const void *elem)
     return list::insert_before (list, 0, elem);
 }
 
-ssize_t list::push_back (list_t *list, const void *elem)
+ssize_t list::push_front (list_t *list, const void *elem)
 {
     assert (list != nullptr && "pointer can't be null");
     assert (elem != nullptr && "pointer can't be null");
@@ -236,7 +236,7 @@ void list::pop (list_t *list, size_t index, void *elem)
     release_free_cell (list, index);
 }
 
-void list::pop_back (list_t *list, void *elem)
+void list::pop_front (list_t *list, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
@@ -245,7 +245,7 @@ void list::pop_back (list_t *list, void *elem)
     list::pop (list, list::next (list, 0), elem);
 }
 
-void list::pop_front (list_t *list, void *elem)
+void list::pop_back (list_t *list, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
@@ -272,6 +272,39 @@ size_t list::prev (const list_t *list, size_t index)
     assert (check_index (list, index, true) && "invalid index");
 
     return list->prev_arr[index];
+}
+
+size_t list::head (const list_t *list)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    list_assert (list);
+
+    return list::next (list, 0);
+}
+
+size_t list::tail (const list_t *list)
+{
+    assert (list != nullptr && "pointer can't be nullptr");
+    list_assert (list);
+
+    return list::prev (list, 0);
+}
+
+// ----------------------------------------------------------------------------
+
+size_t list::get_iter (const list_t *list, size_t index)
+{
+    assert (list != nullptr && "pointer can't be null");
+    list_assert (list);
+    assert (index < list->size && "index out of bounds");
+
+    size_t iter = list::head (list);
+    for (size_t i = 0; i < index; ++i)
+    {
+        iter = list::next (list, iter);
+    }
+
+    return iter;
 }
 
 // ----------------------------------------------------------------------------

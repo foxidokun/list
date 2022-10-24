@@ -15,28 +15,25 @@ int main ()
 
     list::ctor (&list, sizeof (int), 10);
 
-    int q = -1;
-    size_t index = list::push_front (&list, &q);
-    q = -2;
-    index = list::insert_after (&list, index, &q);
-    q = -3;
-    index = list::insert_after (&list, index, &q);
+    int q = 0;
+    q = 0; list::push_back (&list, &q);
+    q = 1; list::push_back (&list, &q);
+    q = 2; list::push_back (&list, &q);
+    q = 3; list::push_back (&list, &q);
 
-    list::resize (&list, 12);
+    list::pop_front (&list, &q); printf ("q = %d\n", q);
+    list::pop_front (&list, &q); printf ("q = %d\n", q);
+    list::pop_front (&list, &q); printf ("q = %d\n", q);
+    list::pop_front (&list, &q); printf ("q = %d\n", q);
 
-    q = -4;
-    index = list::insert_after (&list, index, &q);
+    q = -0; list::push_back (&list, &q);
+    q = -1; list::push_back (&list, &q);
+    q = -2; list::push_back (&list, &q);
+    q = -3; list::push_back (&list, &q);
 
-    q = 0;
-    index = list::push_back (&list, &q);
+    list::dump (&list);
 
-    q = 1;
-    index = list::insert_before (&list, index, &q);
-
-    q = -5;
-    index = list::push_front (&list, &q);
-    q = -6;
-    index = list::push_front (&list, &q);
+    printf ("-2 iter = %zu\n", list::get_iter (&list, 2));
 
     list::dump (&list);
 
