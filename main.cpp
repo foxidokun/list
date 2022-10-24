@@ -7,7 +7,9 @@
 
 int main ()
 {
+    FILE *log = fopen ("log.html", "w");
     set_log_level (log::DBG);
+    set_log_stream (log);
 
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wsign-conversion"
@@ -21,30 +23,30 @@ int main ()
     q = 2; list::push_back (&list, &q);
     q = 3; list::push_back (&list, &q);
 
-    list::pop_front (&list, &q); printf ("q = %d\n", q);
-    list::pop_front (&list, &q); printf ("q = %d\n", q);
-    list::pop_front (&list, &q); printf ("q = %d\n", q);
-    list::pop_front (&list, &q); printf ("q = %d\n", q);
+    list::pop_front (&list, &q); log (log::INF, "q = %d\n", q);
+    list::pop_front (&list, &q); log (log::INF, "q = %d\n", q);
+    list::pop_front (&list, &q); log (log::INF, "q = %d\n", q);
+    list::pop_front (&list, &q); log (log::INF, "q = %d\n", q);
 
     q = -0; list::push_back (&list, &q);
     q = -1; list::push_back (&list, &q);
     q = -2; list::push_back (&list, &q);
     q = -3; list::push_back (&list, &q);
 
-    list::dump (&list);
+    list::dump (&list, get_log_stream ());
 
-    printf ("-2 iter = %zu\n", list::get_iter (&list, 2));
+    log (log::INF, "-2 iter = %zu\n", list::get_iter (&list, 2));
 
-    list::dump (&list);
+    list::dump (&list, get_log_stream ());
 
     list::pop_back (&list, &q);
-    printf ("\nback = %d\n\n", q);
+    log (log::INF, "\nback = %d\n\n", q);
 
     #pragma GCC diagnostic pop
 
-    list::dump (&list);
+    list::dump (&list, get_log_stream ());
 
-    list::print_errs (list::verify (&list), stdout, "\t->");
+    list::print_errs (list::verify (&list), get_log_stream (), "\t->");
 
     list::dtor (&list);
 

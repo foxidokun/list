@@ -3,10 +3,6 @@
 #include "test.h"
 #include "lib/log.h"
 
-#define R "\033[91m"
-#define G "\033[92m"
-#define D "\033[39m"
-
 #define _TEST(cond)                                             \
 {                                                               \
     if (cond)                                                   \

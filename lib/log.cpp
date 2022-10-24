@@ -18,6 +18,10 @@ void set_log_stream (FILE *stream)
     assert (stream != NULL);
 
     __LOG_OUT_STREAM = stream;
+
+    #if HTML_LOGS
+        fprintf (stream, "<pre>\n");
+    #endif
 }
 
 FILE *get_log_stream ()

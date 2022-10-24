@@ -396,7 +396,7 @@ void list::dump (const list::list_t *list, FILE *stream)
     {
         fprintf (stream, "%3zd ", (ssize_t) list->next_arr[i]);
     }
-    putchar ('\n');
+    fputc ('\n', stream);
 }
 
 // ----------------------------------------------------------------------------
