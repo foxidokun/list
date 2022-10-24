@@ -49,10 +49,8 @@ namespace list
     [[nodiscard ("You lost your index")]]
     ssize_t insert_before (list_t *list, size_t index, const void *elem);
 
-    [[nodiscard ("You lost your index")]]
     ssize_t push_front (list_t *list, const void *elem);
 
-    [[nodiscard ("You lost your index")]]
     ssize_t push_back  (list_t *list, const void *elem);
 
     void get (list_t *list, size_t index, void *elem);
