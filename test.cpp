@@ -69,6 +69,7 @@ int test_push_get ()
     list::get (&list, index, &val);
     _ASSERT (val == 228);
 
+    list::dtor (&list);
     return 0;
 }
 
@@ -92,6 +93,7 @@ int test_push_pop ()
     list::pop_back (&list, &val);
     _ASSERT (val == 2);
 
+    list::dtor (&list);
     return 0;
 }
 

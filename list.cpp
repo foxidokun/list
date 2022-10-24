@@ -414,7 +414,15 @@ static ssize_t get_free_cell (list::list_t *list)
     // If we need reallocation
     if (list->free_head == 0) 
     {
-        res = list::resize (list, list->capacity * 2);
+        if (list->capacity == 0)
+        {
+            res = list::resize (list, 1);
+        }
+        else
+        {
+            res = list::resize (list, list->capacity * 2);
+        }
+
 
         if (res != list::OK)
         {
