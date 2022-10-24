@@ -30,11 +30,13 @@
 }
 
 // ----------------------------------------------------------------------------
+static void print_func (void *elem, FILE *stream) {;}
+// ----------------------------------------------------------------------------
 
 int test_ctor_verify_not_empty ()
 {
     list::list_t list;
-    list::ctor (&list, sizeof (int), 10);
+    list::ctor (&list, sizeof (int), 10, print_func);
 
     _ASSERT (list::verify (&list) == list::OK);
 
@@ -45,7 +47,7 @@ int test_ctor_verify_not_empty ()
 int test_ctor_verify_empty ()
 {
     list::list_t list;
-    list::ctor (&list, sizeof (int), 0);
+    list::ctor (&list, sizeof (int), 0, print_func);
 
     _ASSERT (list::verify (&list) == list::OK);
 
@@ -56,7 +58,7 @@ int test_ctor_verify_empty ()
 int test_push_get ()
 {
     list::list_t list;
-    list::ctor (&list, sizeof (int), 0);
+    list::ctor (&list, sizeof (int), 0, print_func);
 
     int val = 228;
     size_t index = list::push_front (&list, &val);
@@ -72,7 +74,7 @@ int test_push_get ()
 int test_push_pop ()
 {
     list::list_t list;
-    list::ctor (&list, sizeof (int), 0);
+    list::ctor (&list, sizeof (int), 0, print_func);
 
     int val = 1;
     size_t index = list::push_front (&list, &val);

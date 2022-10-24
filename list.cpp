@@ -10,6 +10,8 @@
 // ----------------------------------------------------------------------------
 
 static const size_t FREE_NEXT = (size_t) -1;
+static const size_t DUMP_FILE_PATH_LEN = 15;
+static const char DUMP_FILE_PATH_FORMAT[] = "dump/%d.grv";
 
 // ----------------------------------------------------------------------------
 // STATIC DEFINITIONS
@@ -25,19 +27,24 @@ static const size_t FREE_NEXT = (size_t) -1;
 
 static ssize_t get_free_cell (list::list_t *list);
 static void release_free_cell (list::list_t *list, size_t index);
+
 static bool check_cell  (const list::list_t *list, size_t index);
 static bool check_index  (const list::list_t *list, size_t index, bool can_be_zero);
 static void verify_data_loop  (const list::list_t *list, list::err_flags *flags);
 static void verify_free_loop  (const list::list_t *list, list::err_flags *flags);
 
+static void generate_graphiz_code (const list::list_t *list, FILE *stream);
+
 // ----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS
 // ----------------------------------------------------------------------------
 
-list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved)
+list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
+                                void (*print_func)(void *elem, FILE *stream))
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (obj_size > 0 && "Object size can't be less than 1");
+    assert (print_func != nullptr && "pointer can't be nullptr");
 
     // Allocate null object + reserved
     list->data_arr = calloc (reserved + 1, obj_size);
@@ -54,6 +61,7 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved)
     list->reserved = reserved;
     list->capacity = reserved;
     list->size     = 0;
+    list->print_func = print_func;
 
     // Init null cell
     list->prev_arr[0] = 0;
@@ -401,6 +409,44 @@ void list::dump (const list::list_t *list, FILE *stream)
 
 // ----------------------------------------------------------------------------
 
+void list::graph_dump (const list::list_t *list)
+{
+    assert (list   != nullptr && "pointer can't be nullptr");
+
+    static int counter = 0;
+    counter++;
+
+    char filepath[DUMP_FILE_PATH_LEN+1] = "";    
+    sprintf (filepath, DUMP_FILE_PATH_FORMAT, counter);
+
+    FILE *dump_file = fopen (filepath, "w");
+    if (dump_file == nullptr)
+    {
+        log (log::ERR, "Failed to open dump file '%s'", filepath);
+        return;
+    }
+
+    generate_graphiz_code (list, dump_file);
+    fclose (dump_file);
+
+    char cmd[2*DUMP_FILE_PATH_LEN+20+1] = "";
+    sprintf (cmd, "dot -T png -o %s.png %s", filepath, filepath);
+    if (system (cmd) != 0)
+    {
+        log (log::ERR, "Failed to execute '%s'", cmd);
+    }
+
+
+    #if HTML_LOGS
+        log (log::INF, "List dump:");
+        log (log::INF, "\n<img src=\"%s.png\">", filepath);
+    #else
+        log (log::INF, "Dump path: %s.png", filepath);
+    #endif
+}
+
+// ----------------------------------------------------------------------------
+
 const char *list::err_to_str (const list::err_t err)
 {
     switch (err)
@@ -652,4 +698,77 @@ static void verify_free_loop  (const list::list_t *list, list::err_flags *flags)
         *flags |= list::BROKEN_FREE_LOOP;
         return;
     }
+}
+
+// ----------------------------------------------------------------------------
+
+const char PREFIX[]    = "digraph {\nrankdir=LR;\nnode [shape=record,style=\"filled\"]\n";
+
+const char FREE_FILLCOLOR[] = "lightblue";
+const char FREE_COLOR[]     = "darkblue";
+
+const char REGULAR_FILLCOLOR[] = "palegreen";
+const char REGULAR_COLOR[]     = "green";
+
+const char INVALID_FILLCOLOR[] = "lightpink";
+const char INVALID_COLOR[]     = "darkred";
+
+
+static void generate_graphiz_code (const list::list_t *list, FILE *stream)
+{
+    assert (list   != nullptr && "pointer can't be null");
+    assert (stream != nullptr && "pointer can't be null");
+
+    fprintf (stream, PREFIX);
+    const char *fillcolor = nullptr;
+    const char *color     = nullptr;
+    bool is_free = false;
+
+    for (size_t i = 0; i < list->capacity +1; ++i)
+    {
+        // Set colors
+        if (list->next_arr[i] == FREE_NEXT)
+        {
+            is_free   = true;
+            color     = FREE_COLOR;
+            fillcolor = FREE_FILLCOLOR;
+        }
+        else if (check_cell (list, i) || i == 0)
+        {
+            is_free   = false;
+            color     = REGULAR_COLOR;
+            fillcolor = REGULAR_FILLCOLOR;
+        }
+        else
+        {
+            is_free   = false;
+            color     = INVALID_COLOR;
+            fillcolor = INVALID_FILLCOLOR;
+        }
+
+        // Print node
+        fprintf (stream, "node_%zu [label = \"<ind> %zu | {<prev>%zu |", i, i, list->prev_arr[i]);
+        if (is_free) fprintf (stream, "FREE | FREE");
+        else
+        {
+            list->print_func ((char *)list->data_arr + i*list->obj_size, stream);
+            fprintf (stream, "| <next>%zu", list->next_arr[i]);
+        }
+        fprintf (stream, "}\"fillcolor=\"%s\", color=\"%s\"];\n",
+                             fillcolor, color);
+        
+        if (i < list->capacity)
+        {
+            fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 100]", i, i+1);
+        }
+
+        fprintf (stream, "node_%zu:<prev> -> node_%zu:<ind> [constraint=false];\n", i, list->prev_arr[i]);
+
+        if (!is_free)
+        {
+            fprintf (stream, "node_%zu:<next> -> node_%zu:<ind> [constraint=false];\n", i, list->next_arr[i]);
+        }
+    }
+
+    fprintf (stream ,"}");
 }

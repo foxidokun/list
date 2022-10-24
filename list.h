@@ -19,6 +19,8 @@ namespace list
         size_t reserved;
         size_t capacity;
         size_t size;
+
+        void (*print_func)(void *elem, FILE *stream);
     };
 
     typedef uint8_t err_flags; 
@@ -34,7 +36,9 @@ namespace list
         BROKEN_FREE_LOOP    = 1 << 6
     };
 
-    err_t ctor (list_t *list, size_t obj_size, size_t reserved);
+    err_t ctor (list_t *list, size_t obj_size, size_t reserved,
+                        void (*print_func)(void *elem, FILE *stream));
+
 
     void dtor (list_t *list);
 
@@ -72,6 +76,7 @@ namespace list
     const char *err_to_str (const err_t err);
 
     void dump (const list_t *list, FILE *stream = stdout);
+    void graph_dump (const list::list_t *list);
 }
 
 #ifndef NDEBUG

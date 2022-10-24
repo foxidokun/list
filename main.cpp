@@ -5,6 +5,8 @@
 #include "list.h"
 #include "test.h"
 
+static void print_int (void *elem, FILE *stream);
+
 int main ()
 {
     FILE *log = fopen ("log.html", "w");
@@ -15,7 +17,7 @@ int main ()
     #pragma GCC diagnostic ignored "-Wsign-conversion"
     list::list_t list;
 
-    list::ctor (&list, sizeof (int), 10);
+    list::ctor (&list, sizeof (int), 10, print_int);
 
     int q = 0;
     q = 0; list::push_back (&list, &q);
@@ -44,7 +46,7 @@ int main ()
 
     #pragma GCC diagnostic pop
 
-    list::dump (&list, get_log_stream ());
+    list::graph_dump (&list);
 
     list::print_errs (list::verify (&list), get_log_stream (), "\t->");
 
@@ -53,3 +55,10 @@ int main ()
     run_tests ();
 }
 
+static void print_int (void *elem, FILE *stream)
+{
+    assert (elem   != nullptr && "pointer can't be nullptr");
+    assert (stream != nullptr && "pointer can't be nullptr");
+
+    fprintf (stream, "%d", *(int*) elem);
+}
