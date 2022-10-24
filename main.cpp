@@ -1,8 +1,9 @@
-#include "include/common.h"
-#include "list.h"
-
 #include <stdio.h>
+
+#include "include/common.h"
 #include "lib/log.h"
+#include "list.h"
+#include "test.h"
 
 int main ()
 {
@@ -49,5 +50,7 @@ int main ()
     list::print_errs (list::verify (&list), stdout, "\t->");
 
     list::dtor (&list);
+
+    run_tests ();
 }
 
