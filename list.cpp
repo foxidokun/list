@@ -46,6 +46,9 @@ const char PREV_EDGE_COLOR[]    = "indigo";
     }                       \
 }
 
+static list::err_t recalloc_no_sorting  (list::list_t *list, size_t new_capacity);
+static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity);
+
 static ssize_t get_free_cell (list::list_t *list);
 static void release_free_cell (list::list_t *list, size_t index);
 
@@ -60,8 +63,6 @@ static void set_colors (const list::list_t *list, size_t index,
 static void node_codegen (const list::list_t *list, size_t index, const char *fillcolor,
                           const char *color, FILE *stream);
 static void edge_codegen (const list::list_t *list, size_t index, FILE *stream);
-
-
 
 // ----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS
@@ -370,33 +371,32 @@ size_t list::get_iter (const list_t *list, size_t index)
 
 // ----------------------------------------------------------------------------
 
-#define _REALLOC(ptr, size, type)                              \
-{                                                              \
-    tmp_ptr = realloc (ptr, (new_capacity + 1) * size);        \
-    UNWRAP_MALLOC (tmp_ptr);                                   \
-    _Pragma ("GCC diagnostic push")                            \
-    _Pragma ("GCC diagnostic ignored \"-Wuseless-cast\"")      \
-    ptr = (type) tmp_ptr;                                      \
-    _Pragma ("GCC diagnostic pop")                             \
+#define _UNWRAP(expr)       \
+{                           \
+    tmp_res = (expr);       \
+    if (tmp_res != list::OK)\
+    {                       \
+        return tmp_res;     \
+    }                       \
 }
 
-list::err_t list::resize (list::list_t *list, size_t new_capacity)
+list::err_t list::resize (list::list_t *list, size_t new_capacity, bool linearise)
 {
     assert (list != nullptr && "poointer can't be nullptr");
     list_assert (list);
     assert (new_capacity > list->capacity && "current implementation can't shrink");
 
-    // Realocate arrays
-    void *tmp_ptr = nullptr;
+    list::err_t tmp_res = list::OK;
 
-    _REALLOC (list->data_arr,  list->obj_size, void   *);
-    _REALLOC (list->next_arr, sizeof (size_t), size_t *);
-    _REALLOC (list->prev_arr, sizeof (size_t), size_t *);
-
-    // Recreate free stack
-
-    list->prev_arr[list->capacity + 1] = FREE_PREV;
-    list->next_arr[list->capacity + 1] = list->free_head;
+    // Realloc stack
+    if (linearise)
+    {
+        _UNWRAP (recalloc_and_sorting(list, new_capacity));
+    }
+    else
+    {
+        _UNWRAP (recalloc_no_sorting (list, new_capacity));
+    }
 
     for (size_t i = list->capacity + 1; i < new_capacity + 1; ++i)
     {
@@ -409,8 +409,8 @@ list::err_t list::resize (list::list_t *list, size_t new_capacity)
         list->next_arr[list->free_back] = list->capacity + 1;
     }
 
-    list->free_back = new_capacity;
     list->next_arr[new_capacity] = 0;
+    list->free_back = new_capacity;
 
     if (list->free_head == 0)
     {
@@ -422,7 +422,30 @@ list::err_t list::resize (list::list_t *list, size_t new_capacity)
     return list::OK;
 }
 
-#undef _REALLOC
+
+// ----------------------------------------------------------------------------
+
+#define _UNWRAP(expr)       \
+{                           \
+    tmp_res = (expr);       \
+    if (tmp_res != list::OK)\
+    {                       \
+        return tmp_res;     \
+    }                       \
+}
+
+list::err_t list::sort (list::list_t *list)
+{
+    assert (list != nullptr && "poointer can't be nullptr");
+    list_assert (list);
+
+    list::err_t tmp_res = list::OK;
+
+    _UNWRAP(recalloc_and_sorting (list, list->capacity));
+
+    return list::OK;
+}
+
 
 // ----------------------------------------------------------------------------
 
@@ -908,4 +931,83 @@ static void edge_codegen (const list::list_t *list, size_t index, FILE *stream)
                          "constraint=false];\n", index, list->next_arr[index],
                          NEXT_EDGE_COLOR);
     }   
+}
+
+// ----------------------------------------------------------------------------
+
+#define _REALLOC(ptr, size, type)                              \
+{                                                              \
+    tmp_ptr = realloc (ptr, (new_capacity + 1) * size);        \
+    UNWRAP_MALLOC (tmp_ptr);                                   \
+    _Pragma ("GCC diagnostic push")                            \
+    _Pragma ("GCC diagnostic ignored \"-Wuseless-cast\"")      \
+    ptr = (type) tmp_ptr;                                      \
+    _Pragma ("GCC diagnostic pop")                             \
+}
+
+static list::err_t recalloc_no_sorting  (list::list_t *list, size_t new_capacity)
+{
+    assert (list != nullptr && "pointer can't be null");
+
+    // Realocate arrays
+    void *tmp_ptr = nullptr;
+
+    _REALLOC (list->data_arr,  list->obj_size, void   *);
+    _REALLOC (list->next_arr, sizeof (size_t), size_t *);
+    _REALLOC (list->prev_arr, sizeof (size_t), size_t *);
+
+    return list::OK;
+}
+
+#undef _REALLOC
+
+// ----------------------------------------------------------------------------
+
+static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity)
+{
+    assert (list != nullptr && "pointer can't be null");
+
+    char *new_data = (char *) calloc (new_capacity + 1, list->obj_size);
+    if (new_data == nullptr) { return list::OOM; }
+
+    char *new_elem_ptr   = new_data;
+    char *old_elem_ptr   = nullptr;
+    size_t index         = 0;
+
+    // Copy to new buffer
+    for (size_t i = 0; i < list->size; ++i)
+    {
+        index = list->next_arr[index];
+        old_elem_ptr  = (char*)list->data_arr + index * list->obj_size;
+        new_elem_ptr += list->obj_size;
+
+        memcpy (new_elem_ptr, old_elem_ptr, list->obj_size);
+
+        list->next_arr[i + 1] = i + 2;
+        list->prev_arr[i + 1] = i;
+    }
+
+    // Loop
+    list->prev_arr[0] = list->size;
+    list->next_arr[0] = 1;
+    list->next_arr[list->size] = 0;
+
+    // Recreate free loop
+    if (list->free_head != 0)
+    {
+        list->free_head = list->size + 1;
+        list->free_back = list->capacity;
+
+        for (size_t i = list->size + 1; i < list->capacity + 1; ++i)
+        {
+            list->prev_arr[i] = FREE_PREV;
+            list->next_arr[i] = i + 1;
+        }
+
+        list->next_arr[list->capacity] = 0;
+    }
+
+    free (list->data_arr);
+    list->data_arr = new_data;
+    return list::OK;
 }

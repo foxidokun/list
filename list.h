@@ -72,7 +72,9 @@ namespace list
 
     size_t get_iter (const list_t *list, size_t index);
 
-    err_t resize (list_t *list, size_t new_capacity);
+    err_t resize (list_t *list, size_t new_capacity, bool linearise = false);
+
+    err_t sort (list_t *list);
 
     const char *err_to_str (const err_t err);
 
@@ -83,8 +85,8 @@ namespace list
 #ifndef NDEBUG
     #define list_assert(list)                                       \
     {                                                               \
-        err_flags check_res = list::verify (list);                  \
-        if (check_res != err_t::OK)                                 \
+        list::err_flags check_res = list::verify (list);                  \
+        if (check_res != list::OK)                                 \
         {                                                           \
             log(log::ERR,                                           \
                 "Invalid list with errors: ");                      \

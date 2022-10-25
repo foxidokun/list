@@ -35,7 +35,13 @@ int main ()
     q = -2; list::push_back (&list, &q);
     q = -3; list::push_back (&list, &q);
 
-    list::dump (&list, get_log_stream ());
+    list::graph_dump (&list);
+
+    log (log::DBG, "SORTING");
+    list::sort (&list);
+    log (log::DBG, "SORTING");
+
+    list::graph_dump (&list);
 
     log (log::INF, "-2 iter = %zu\n", list::get_iter (&list, 2));
 
