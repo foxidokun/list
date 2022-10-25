@@ -14,6 +14,7 @@ namespace list
         size_t *next_arr;
 
         size_t free_head;
+        size_t free_back;
         
         size_t obj_size;
         size_t reserved;

@@ -39,6 +39,14 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream);
 // PUBLIC FUNCTIONS
 // ----------------------------------------------------------------------------
 
+#define _UNWRAP_MALLOC_GOTO(ptr)    \
+{                                   \
+    if (ptr == nullptr)             \
+    {                               \
+        goto failed_malloc_cleanup; \
+    }                               \
+}
+
 list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
                                 void (*print_func)(void *elem, FILE *stream))
 {
@@ -46,15 +54,20 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     assert (obj_size > 0 && "Object size can't be less than 1");
     assert (print_func != nullptr && "pointer can't be nullptr");
 
+    //Nuke them
+    list->data_arr = nullptr;
+    list->prev_arr = nullptr;
+    list->next_arr = nullptr;
+
     // Allocate null object + reserved
     list->data_arr = calloc (reserved + 1, obj_size);
-    UNWRAP_MALLOC (list->data_arr);
+    _UNWRAP_MALLOC_GOTO (list->data_arr);
 
     list->prev_arr = (size_t*) calloc (reserved + 1, sizeof (size_t)); 
-    UNWRAP_MALLOC (list->prev_arr);
+    _UNWRAP_MALLOC_GOTO (list->prev_arr);
 
     list->next_arr = (size_t*) calloc (reserved + 1, sizeof (size_t)); 
-    UNWRAP_MALLOC (list->next_arr);
+    _UNWRAP_MALLOC_GOTO (list->next_arr);
 
     // Init fields
     list->obj_size = obj_size;
@@ -76,7 +89,17 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     list->free_head = reserved;
 
     return list::OK;
+
+    failed_malloc_cleanup:
+        free (list->data_arr);
+        free (list->prev_arr);
+        free (list->next_arr);
+        return list::OOM;
 }
+
+#undef _UNWRAP_MALLOC_GOTO
+
+// ----------------------------------------------------------------------------
 
 void list::dtor (list_t *list)
 {
