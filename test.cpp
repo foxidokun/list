@@ -30,7 +30,7 @@
 }
 
 // ----------------------------------------------------------------------------
-static void print_func (void *elem, FILE *stream) {;}
+static void print_func (void *, FILE *) {;}
 // ----------------------------------------------------------------------------
 
 int test_ctor_verify_not_empty ()
