@@ -9,7 +9,7 @@
 // CONST SECTION
 // ----------------------------------------------------------------------------
 
-static const size_t FREE_NEXT = (size_t) -1;
+static const size_t FREE_PREV = (size_t) -1;
 static const size_t DUMP_FILE_PATH_LEN = 15;
 static const char DUMP_FILE_PATH_FORMAT[] = "dump/%d.grv";
 
@@ -83,10 +83,12 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     // Init free cells
     for (size_t i = 1; i <= reserved; ++i)
     {
-        list->next_arr[i] = FREE_NEXT;
-        list->prev_arr[i] = i-1;
+        list->next_arr[i] = i + 1;
+        list->prev_arr[i] = FREE_PREV;
     }
-    list->free_head = reserved;
+    list->next_arr[reserved] = 0;
+    list->free_head          = (reserved > 0) ? 1 : 0;
+    list->free_back          = reserved;
 
     return list::OK;
 
@@ -365,16 +367,28 @@ list::err_t list::resize (list::list_t *list, size_t new_capacity)
 
     // Recreate free stack
 
-    list->prev_arr[list->capacity + 1] = list->free_head;
-    list->next_arr[list->capacity + 1] = FREE_NEXT;
+    list->prev_arr[list->capacity + 1] = FREE_PREV;
+    list->next_arr[list->capacity + 1] = list->free_head;
 
-    for (size_t i = list->capacity + 2; i < new_capacity + 1; ++i)
+    for (size_t i = list->capacity + 1; i < new_capacity + 1; ++i)
     {
-        list->prev_arr[i] = i - 1;
-        list->next_arr[i] = FREE_NEXT;
+        list->prev_arr[i] = FREE_PREV;
+        list->next_arr[i] = i + 1;
     }
 
-    list->free_head = new_capacity;
+    if (list->free_back != 0)
+    {
+        list->next_arr[list->free_back] = list->capacity + 1;
+    }
+
+    list->free_back = new_capacity;
+    list->next_arr[new_capacity] = 0;
+
+    if (list->free_head == 0)
+    {
+        list->free_head = list->capacity + 1;
+    }
+
     list->capacity  = new_capacity;
 
     return list::OK;
@@ -406,7 +420,7 @@ void list::dump (const list::list_t *list, FILE *stream)
     fprintf (stream, "\nData: ");
     for (size_t i = 0; i <= list->capacity; ++i)
     {
-        if (list->next_arr[i] != FREE_NEXT)
+        if (list->prev_arr[i] != FREE_PREV)
         {
             fprintf (stream, "%3d ", ((int *)list->data_arr)[i]);
         }
@@ -419,7 +433,14 @@ void list::dump (const list::list_t *list, FILE *stream)
     fprintf (stream, "\nPrev: ");
     for (size_t i = 0; i <= list->capacity; ++i)
     {
-        fprintf (stream, "%3zu ", list->prev_arr[i]);
+        if (list->prev_arr[i] == FREE_PREV)
+        {
+            fprintf (stream, "  F ");
+        }
+        else
+        {
+            fprintf (stream, "%3zu ", list->prev_arr[i]);
+        }
     }
 
     fprintf (stream, "\nNext: ");
@@ -434,7 +455,7 @@ void list::dump (const list::list_t *list, FILE *stream)
 
 void list::graph_dump (const list::list_t *list)
 {
-    assert (list   != nullptr && "pointer can't be nullptr");
+    assert (list != nullptr && "pointer can't be nullptr");
 
     static int counter = 0;
     counter++;
@@ -466,6 +487,8 @@ void list::graph_dump (const list::list_t *list)
     #else
         log (log::INF, "Dump path: %s.png", filepath);
     #endif
+
+    fflush (get_log_stream ());
 }
 
 // ----------------------------------------------------------------------------
@@ -535,7 +558,13 @@ static ssize_t get_free_cell (list::list_t *list)
 
     size_t free_index = list->free_head;
 
-    list->free_head = list->prev_arr[list->free_head];
+    list->free_head = list->next_arr[list->free_head];
+
+    if (list->free_head == 0)
+    {
+        list->free_back = 0;
+    }
+
     list->size++;
 
     return (ssize_t) free_index;
@@ -546,8 +575,8 @@ static void release_free_cell (list::list_t *list, size_t index)
     assert (list != nullptr && "pointer can't be nullptr");
     assert (check_index (list, index, false) && "invalid index");
 
-    list->next_arr[index] = FREE_NEXT;
-    list->prev_arr[index] = list->free_head;
+    list->next_arr[index] = list->free_head;
+    list->prev_arr[index] = FREE_PREV;
     list->free_head       = index;
     list->size--;
 }
@@ -558,7 +587,7 @@ static void release_free_cell (list::list_t *list, size_t index)
 {                                                   \
     if (cond)                                       \
     {                                               \
-        log (log::ERR, "Invalid index (%s)", msg);  \
+        log (log::DBG, "Invalid index (%s)", msg);  \
         return false;                               \
     }                                               \
 }
@@ -569,7 +598,7 @@ static bool check_index (const list::list_t *list, size_t index, bool can_be_zer
 
     _ERR_CASE (!can_be_zero && index == 0, "null");
     _ERR_CASE (index > list->capacity, "out of bounds");
-    _ERR_CASE (list->next_arr[index] == FREE_NEXT, "points to free cell");
+    _ERR_CASE (list->prev_arr[index] == FREE_PREV, "points to free cell");
 
     return true;
 }
@@ -584,11 +613,11 @@ static bool check_cell (const list::list_t *list, size_t index)
 
     if (!check_index (list, index, false))
     {
-        log (log::ERR, "current index is incorrect");
+        log (log::DBG, "current index is incorrect");
         return false;
     }
 
-    if (list->next_arr[index] == FREE_NEXT)
+    if (list->prev_arr[index] == FREE_PREV)
     {
         log (log::ERR, "Free cell");
         return false;
@@ -697,13 +726,13 @@ static void verify_free_loop  (const list::list_t *list, list::err_flags *flags)
 
     for (size_t i = 0; i < list->capacity - list->size; ++i)
     {
-        if (list->next_arr[index] != FREE_NEXT)
+        if (list->prev_arr[index] != FREE_PREV)
         {
             log (log::ERR, "Invalid free cell %zu", i);
             return;
         }
 
-        index = list->prev_arr[index];
+        index = list->next_arr[index];
 
         if (index > list->capacity)
         {
@@ -725,7 +754,7 @@ static void verify_free_loop  (const list::list_t *list, list::err_flags *flags)
 
 // ----------------------------------------------------------------------------
 
-const char PREFIX[]    = "digraph {\nrankdir=LR;\nnode [shape=record,style=\"filled\"]\n";
+const char PREFIX[]    = "digraph {\nrankdir=LR;\nnode [shape=record,style=\"filled\"]\nsplines=ortho;\n";
 
 const char FREE_FILLCOLOR[] = "lightblue";
 const char FREE_COLOR[]     = "darkblue";
@@ -736,6 +765,8 @@ const char REGULAR_COLOR[]     = "green";
 const char INVALID_FILLCOLOR[] = "lightpink";
 const char INVALID_COLOR[]     = "darkred";
 
+const char NULLCELL_FILLCOLOR[] = "linen";
+const char NULLCELL_COLOR[]     = "lemonchiffon";
 
 static void generate_graphiz_code (const list::list_t *list, FILE *stream)
 {
@@ -747,10 +778,27 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     const char *color     = nullptr;
     bool is_free = false;
 
+    fprintf (stream, "node_main [label = \"STRUCT "
+                    " |  capacity: %zu | obj_size: %zu"
+                      "| reserved: %zu | size: %zu|<fh>free_head: %zu | <fb> free_back: %zu\"]\n",
+                      list->capacity, list->obj_size,
+                      list->reserved, list->size, list->free_head, list->free_back);
+
+    fprintf (stream, "node_main:fb -> node_%zu [style=\"dotted\", color = \"skyblue\"]", list->free_back);
+    fprintf (stream, "node_main:fh -> node_%zu [style=\"dotted\", color = \"skyblue\"]", list->free_head);
+    fprintf (stream, "node_main    -> node_0   [style=\"invis\", weight=100]");
+
     for (size_t i = 0; i < list->capacity +1; ++i)
     {
         // Set colors
-        if (list->next_arr[i] == FREE_NEXT)
+        is_free = false;
+
+        if (i == 0)
+        {
+            color     = NULLCELL_COLOR;
+            fillcolor = NULLCELL_FILLCOLOR;
+        }
+        else if (list->prev_arr[i] == FREE_PREV)
         {
             is_free   = true;
             color     = FREE_COLOR;
@@ -758,25 +806,25 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
         }
         else if (check_cell (list, i) || i == 0)
         {
-            is_free   = false;
             color     = REGULAR_COLOR;
             fillcolor = REGULAR_FILLCOLOR;
         }
         else
         {
-            is_free   = false;
             color     = INVALID_COLOR;
             fillcolor = INVALID_FILLCOLOR;
         }
 
         // Print node
-        fprintf (stream, "node_%zu [label = \"<ind> %zu | {<prev>%zu |", i, i, list->prev_arr[i]);
+        fprintf (stream, "node_%zu [label = \"<ind> %zu | {", i, i);
         if (is_free) fprintf (stream, "FREE | FREE");
         else
         {
+            fprintf (stream, "<prev> p: %zu |", list->prev_arr[i]);
             list->print_func ((char *)list->data_arr + i*list->obj_size, stream);
-            fprintf (stream, "| <next>%zu", list->next_arr[i]);
         }
+        
+        fprintf (stream, "| <next> n: %zu", list->next_arr[i]);
         fprintf (stream, "}\"fillcolor=\"%s\", color=\"%s\"];\n",
                              fillcolor, color);
         
@@ -785,12 +833,21 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
             fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 100]", i, i+1);
         }
 
-        fprintf (stream, "node_%zu:<prev> -> node_%zu:<ind> [constraint=false];\n", i, list->prev_arr[i]);
 
         if (!is_free)
         {
-            fprintf (stream, "node_%zu:<next> -> node_%zu:<ind> [constraint=false];\n", i, list->next_arr[i]);
+            fprintf (stream, "node_%zu -> node_%zu[color = \"indigo\", constraint=false];\n", i, list->prev_arr[i]);
         }
+
+        if (is_free)
+        {
+            fprintf (stream, "node_%zu -> node_%zu[color = \"coral\", style=\"dashed\", constraint=false];\n", i, list->next_arr[i]);
+        }
+        else
+        {
+            fprintf (stream, "node_%zu -> node_%zu[color = \"coral\", constraint=false];\n", i, list->next_arr[i]);
+        }
+
     }
 
     fprintf (stream ,"}");
