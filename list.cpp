@@ -99,10 +99,11 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     _UNWRAP_MALLOC_GOTO (list->next_arr);
 
     // Init fields
-    list->obj_size = obj_size;
-    list->reserved = reserved;
-    list->capacity = reserved;
-    list->size     = 0;
+    list->obj_size   = obj_size;
+    list->reserved   = reserved;
+    list->capacity   = reserved;
+    list->size       = 0;
+    list->is_sorted  = true;
     list->print_func = print_func;
 
     // Init null cell
@@ -222,6 +223,11 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
     list_assert (list);
     assert (check_index (list, index, true) && "invalid index");
 
+    if (list->next_arr[index] != 0)
+    {
+        list->is_sorted = false;
+    }
+
     // Find free cell
     ssize_t free_index_tmp = get_free_cell (list);
     if (free_index_tmp == -1) return -1;
@@ -292,6 +298,11 @@ void list::pop (list_t *list, size_t index, void *elem)
     list_assert (list);
     assert (check_index (list, index, false) && "invalid index");
 
+    if (list->prev_arr[index] != 0 && list->next_arr[index] != 0)
+    {
+        list->is_sorted = false;
+    }
+
     list::get (list, index, elem);
     list->next_arr[list->prev_arr[index]] = list->next_arr[index];
     list->prev_arr[list->next_arr[index]] = list->prev_arr[index];
@@ -359,6 +370,11 @@ size_t list::get_iter (const list_t *list, size_t index)
     assert (list != nullptr && "pointer can't be null");
     list_assert (list);
     assert (index < list->size && "index out of bounds");
+
+    if (list->is_sorted)
+    {
+        return (list->next_arr[0] + index - 1) % list->capacity + 1;
+    }
 
     size_t iter = list::head (list);
     for (size_t i = 0; i < index; ++i)
@@ -1008,6 +1024,7 @@ static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity
     }
 
     free (list->data_arr);
-    list->data_arr = new_data;
+    list->data_arr  = new_data;
+    list->is_sorted = true;
     return list::OK;
 }

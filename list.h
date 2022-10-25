@@ -21,6 +21,8 @@ namespace list
         size_t capacity;
         size_t size;
 
+        bool is_sorted;
+
         void (*print_func)(void *elem, FILE *stream);
     };
 
