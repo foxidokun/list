@@ -14,6 +14,27 @@ static const size_t DUMP_FILE_PATH_LEN = 15;
 static const char DUMP_FILE_PATH_FORMAT[] = "dump/%d.grv";
 
 // ----------------------------------------------------------------------------
+// GRAPHVIZ SECTION
+// ----------------------------------------------------------------------------
+
+const char PREFIX[] = "digraph {\nrankdir=LR;\nnode [shape=record,style=\"filled\"]\nsplines=ortho;\n";
+
+const char FREE_FILLCOLOR[]     = "lightblue";
+const char FREE_COLOR[]         = "darkblue";
+
+const char REGULAR_FILLCOLOR[]  = "palegreen";
+const char REGULAR_COLOR[]      = "green";
+
+const char INVALID_FILLCOLOR[]  = "lightpink";
+const char INVALID_COLOR[]      = "darkred";
+
+const char NULLCELL_FILLCOLOR[] = "linen";
+const char NULLCELL_COLOR[]     = "lemonchiffon";
+
+const char NEXT_EDGE_COLOR[]    = "coral";
+const char PREV_EDGE_COLOR[]    = "indigo";
+
+// ----------------------------------------------------------------------------
 // STATIC DEFINITIONS
 // ----------------------------------------------------------------------------
 
@@ -34,6 +55,13 @@ static void verify_data_loop  (const list::list_t *list, list::err_flags *flags)
 static void verify_free_loop  (const list::list_t *list, list::err_flags *flags);
 
 static void generate_graphiz_code (const list::list_t *list, FILE *stream);
+static void set_colors (const list::list_t *list, size_t index,
+                        const char **fillcolor, const char **color);
+static void node_codegen (const list::list_t *list, size_t index, const char *fillcolor,
+                          const char *color, FILE *stream);
+static void edge_codegen (const list::list_t *list, size_t index, FILE *stream);
+
+
 
 // ----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS
@@ -754,20 +782,6 @@ static void verify_free_loop  (const list::list_t *list, list::err_flags *flags)
 
 // ----------------------------------------------------------------------------
 
-const char PREFIX[]    = "digraph {\nrankdir=LR;\nnode [shape=record,style=\"filled\"]\nsplines=ortho;\n";
-
-const char FREE_FILLCOLOR[] = "lightblue";
-const char FREE_COLOR[]     = "darkblue";
-
-const char REGULAR_FILLCOLOR[] = "palegreen";
-const char REGULAR_COLOR[]     = "green";
-
-const char INVALID_FILLCOLOR[] = "lightpink";
-const char INVALID_COLOR[]     = "darkred";
-
-const char NULLCELL_FILLCOLOR[] = "linen";
-const char NULLCELL_COLOR[]     = "lemonchiffon";
-
 static void generate_graphiz_code (const list::list_t *list, FILE *stream)
 {
     assert (list   != nullptr && "pointer can't be null");
@@ -776,7 +790,6 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     fprintf (stream, PREFIX);
     const char *fillcolor = nullptr;
     const char *color     = nullptr;
-    bool is_free = false;
 
     fprintf (stream, "node_main [label = \"STRUCT "
                     " |  capacity: %zu | obj_size: %zu"
@@ -791,64 +804,108 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     for (size_t i = 0; i < list->capacity +1; ++i)
     {
         // Set colors
-        is_free = false;
-
-        if (i == 0)
-        {
-            color     = NULLCELL_COLOR;
-            fillcolor = NULLCELL_FILLCOLOR;
-        }
-        else if (list->prev_arr[i] == FREE_PREV)
-        {
-            is_free   = true;
-            color     = FREE_COLOR;
-            fillcolor = FREE_FILLCOLOR;
-        }
-        else if (check_cell (list, i) || i == 0)
-        {
-            color     = REGULAR_COLOR;
-            fillcolor = REGULAR_FILLCOLOR;
-        }
-        else
-        {
-            color     = INVALID_COLOR;
-            fillcolor = INVALID_FILLCOLOR;
-        }
+        set_colors (list, i, &fillcolor, &color);
 
         // Print node
-        fprintf (stream, "node_%zu [label = \"<ind> %zu | {", i, i);
-        if (is_free) fprintf (stream, "FREE | FREE");
-        else
-        {
-            fprintf (stream, "<prev> p: %zu |", list->prev_arr[i]);
-            list->print_func ((char *)list->data_arr + i*list->obj_size, stream);
-        }
-        
-        fprintf (stream, "| <next> n: %zu", list->next_arr[i]);
-        fprintf (stream, "}\"fillcolor=\"%s\", color=\"%s\"];\n",
-                             fillcolor, color);
-        
-        if (i < list->capacity)
-        {
-            fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 100]", i, i+1);
-        }
+        node_codegen (list, i, fillcolor, color, stream);
 
-
-        if (!is_free)
-        {
-            fprintf (stream, "node_%zu -> node_%zu[color = \"indigo\", constraint=false];\n", i, list->prev_arr[i]);
-        }
-
-        if (is_free)
-        {
-            fprintf (stream, "node_%zu -> node_%zu[color = \"coral\", style=\"dashed\", constraint=false];\n", i, list->next_arr[i]);
-        }
-        else
-        {
-            fprintf (stream, "node_%zu -> node_%zu[color = \"coral\", constraint=false];\n", i, list->next_arr[i]);
-        }
-
+        // Generate edges
+        edge_codegen (list, i, stream);
     }
 
     fprintf (stream ,"}");
+}
+
+// ----------------------------------------------------------------------------
+
+static void set_colors (const list::list_t *list, size_t index,
+                        const char **fillcolor, const char **color)
+{
+    assert (list      != nullptr && "invalid pointer");
+
+    if (index == 0)
+    {
+        *color     = NULLCELL_COLOR;
+        *fillcolor = NULLCELL_FILLCOLOR;
+    }
+    else if (list->prev_arr[index] == FREE_PREV)
+    {
+        *color     = FREE_COLOR;
+        *fillcolor = FREE_FILLCOLOR;
+    }
+    else if (check_cell (list, index) || index == 0)
+    {
+        *color     = REGULAR_COLOR;
+        *fillcolor = REGULAR_FILLCOLOR;
+    }
+    else
+    {
+        *color     = INVALID_COLOR;
+        *fillcolor = INVALID_FILLCOLOR;
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+static void node_codegen (const list::list_t *list, size_t index, const char *fillcolor,
+                        const char *color, FILE *stream)
+{
+    assert (list      != nullptr && "invalid pointer");
+    assert (fillcolor != nullptr && "invalid pointer");
+    assert (color     != nullptr && "invalid pointer");
+    assert (stream    != nullptr && "invalid pointer");
+
+    bool is_free = list->prev_arr[index] == FREE_PREV;
+
+    fprintf (stream, "node_%zu [label = \"<ind>ind: %zu | {", index, index);
+    if (is_free) fprintf (stream, "FREE | FREE");
+    else
+    {
+        fprintf (stream, "<prev> p: %zu |", list->prev_arr[index]);
+        list->print_func ((char *)list->data_arr + index*list->obj_size, stream);
+    }
+    
+    fprintf (stream, "| <next> n: %zu", list->next_arr[index]);
+    fprintf (stream, "}\"fillcolor=\"%s\", color=\"%s\"];\n",
+                         fillcolor, color);
+}
+
+// ----------------------------------------------------------------------------
+
+static void edge_codegen (const list::list_t *list, size_t index, FILE *stream)
+{
+    assert (list   != nullptr && "pointer can't be nullptr");
+    assert (stream != nullptr && "pointer can't be nullptr");
+
+    bool is_free = list->prev_arr[index] == FREE_PREV;
+
+
+    // Invisible edge
+    if (index < list->capacity)
+    {
+        fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 100]",
+                    index, index+1);
+    }
+
+    // Prev edge
+    if (!is_free)
+    {
+        fprintf (stream, "node_%zu -> node_%zu[color = \"%s\","
+                         "constraint=false];\n", index, list->prev_arr[index],
+                         PREV_EDGE_COLOR);
+    }
+
+    // Next edge
+    if (is_free)
+    {
+        fprintf (stream, "node_%zu -> node_%zu[color = \"%s\", style=\"dashed\","
+                         "constraint=false];\n", index, list->next_arr[index],
+                         NEXT_EDGE_COLOR);
+    }
+    else
+    {
+        fprintf (stream, "node_%zu -> node_%zu[color = \"%s\","
+                         "constraint=false];\n", index, list->next_arr[index],
+                         NEXT_EDGE_COLOR);
+    }   
 }
