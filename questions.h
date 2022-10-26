@@ -22,5 +22,24 @@ const char QUESTIONS[10][1000] =
         ,
 
         "Thank you. God bless, and God bless ...?\n"
-        "Van Darkholm\n"
+        "0) Van Darkholm\n"
+        "1) Billy Herington\n"
+        "2) Ricardo Milos\n"
+        "3) Nico Nico Douga\n"
+        ,
+
+        "Это картина ♂...♂ тех, кто\n"
+        "4) gym'a\n"
+        "5) wee-wee\n"
+        "6) slaves\n"
+        "7) master'a\n"
+        ,
+
+        "♂...♂ не победить\n"
+        "4) Van\n"
+        "5) Billy\n"
+        "6) Master\n"
+        "7) Nico Nico\n"
+        ,
+
 };
