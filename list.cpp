@@ -38,12 +38,13 @@ const char PREV_EDGE_COLOR[]    = "indigo";
 // STATIC DEFINITIONS
 // ----------------------------------------------------------------------------
 
-#define UNWRAP_MALLOC(val)  \
-{                           \
-    if ((val) == nullptr)   \
-    {                       \
-        return list::OOM;   \
-    }                       \
+#define UNWRAP_MALLOC(val)    \
+{                             \
+    if ((val) == nullptr)     \
+    {                         \
+        log (log::ERR, "OOM");\
+        return list::OOM;     \
+    }                         \
 }
 
 static list::err_t recalloc_no_sorting  (list::list_t *list, size_t new_capacity);
@@ -223,16 +224,16 @@ ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
     list_assert (list);
     assert (check_index (list, index, true) && "invalid index");
 
-    if (list->next_arr[index] != 0)
-    {
-        list->is_sorted = false;
-    }
-
     // Find free cell
     ssize_t free_index_tmp = get_free_cell (list);
     if (free_index_tmp == -1) return -1;
 
     size_t free_index = (size_t) free_index_tmp;
+
+    if (free_index != index + 1)
+    {
+        list->is_sorted = false;
+    }
 
     // Copy data
     char *cell_data_ptr = (char *)list->data_arr +
@@ -831,9 +832,9 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     const char *color     = nullptr;
 
     fprintf (stream, "node_main [label = \"STRUCT "
-                    " |  capacity: %zu | obj_size: %zu"
+                    " |  capacity: %zu | obj_size: %zu | is_sorted: %s (%d)"
                       "| reserved: %zu | size: %zu|<fh>free_head: %zu | <fb> free_back: %zu\"]\n",
-                      list->capacity, list->obj_size,
+                      list->capacity, list->obj_size, list->is_sorted ? "true" : "false", list->is_sorted,
                       list->reserved, list->size, list->free_head, list->free_back);
 
     fprintf (stream, "node_main:fb -> node_%zu [style=\"dotted\", color = \"skyblue\"]", list->free_back);
@@ -860,7 +861,7 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
 static void set_colors (const list::list_t *list, size_t index,
                         const char **fillcolor, const char **color)
 {
-    assert (list      != nullptr && "invalid pointer");
+    assert (list != nullptr && "invalid pointer");
 
     if (index == 0)
     {
@@ -896,15 +897,25 @@ static void node_codegen (const list::list_t *list, size_t index, const char *fi
 
     bool is_free = list->prev_arr[index] == FREE_PREV;
 
-    fprintf (stream, "node_%zu [label = \"<ind>ind: %zu | {", index, index);
-    if (is_free) fprintf (stream, "FREE | FREE");
+    if (is_free)
+    {
+        fprintf (stream, "node_%zu [label = \"FREE | { FREE", index);
+    }
     else
     {
-        fprintf (stream, "<prev> p: %zu |", list->prev_arr[index]);
-        list->print_func ((char *)list->data_arr + index*list->obj_size, stream);
+        fprintf (stream, "node_%zu [label = \"", index);
+        if (index != 0)
+        {
+            list->print_func ((char *)list->data_arr + index*list->obj_size, stream);
+        }
+        else
+        {
+            fprintf (stream, "nil"); 
+        }
+        fprintf (stream, "| { p: %zu", list->prev_arr[index]);
     }
     
-    fprintf (stream, "| <next> n: %zu", list->next_arr[index]);
+    fprintf (stream, "| i: %zu| <next> n: %zu", index, list->next_arr[index]);
     fprintf (stream, "}\"fillcolor=\"%s\", color=\"%s\"];\n",
                          fillcolor, color);
 }
