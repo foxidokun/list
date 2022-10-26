@@ -13,6 +13,8 @@ static const size_t FREE_PREV = (size_t) -1;
 static const size_t DUMP_FILE_PATH_LEN = 15;
 static const char DUMP_FILE_PATH_FORMAT[] = "dump/%d.grv";
 
+const int INDEX_MAX_LEN = 10;
+
 // ----------------------------------------------------------------------------
 // GRAPHVIZ SECTION
 // ----------------------------------------------------------------------------
@@ -33,6 +35,15 @@ const char NULLCELL_COLOR[]     = "lemonchiffon";
 
 const char NEXT_EDGE_COLOR[]    = "coral";
 const char PREV_EDGE_COLOR[]    = "indigo";
+
+// ----------------------------------------------------------------------------
+// CRINGE WRAPPER SECTION
+// ----------------------------------------------------------------------------
+
+const int RAND_TRUE_MAX = RAND_MAX / 10;
+const int NUM_OF_TRIES  = 3;
+
+#include "questions.h"
 
 // ----------------------------------------------------------------------------
 // STATIC DEFINITIONS
@@ -64,6 +75,8 @@ static void set_colors (const list::list_t *list, size_t index,
 static void node_codegen (const list::list_t *list, size_t index, const char *fillcolor,
                           const char *color, FILE *stream);
 static void edge_codegen (const list::list_t *list, size_t index, FILE *stream);
+
+static bool cringe_get_iter_wrapper (size_t index);
 
 // ----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS
@@ -1038,4 +1051,58 @@ static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity
     list->data_arr  = new_data;
     list->is_sorted = true;
     return list::OK;
+}
+
+// ----------------------------------------------------------------------------
+
+static bool cringe_get_iter_wrapper (size_t index)
+{
+    char index_str[INDEX_MAX_LEN] = "";
+    bool right_guess = true;
+
+    sprintf (index_str, "%zu", index);
+    size_t index_len = strlen (index_str);
+
+    int right_ans = 0;
+    int user_ans  = 0;
+
+    for (int n = 0; n < NUM_OF_TRIES; ++n)
+    {
+        printf ("Чтобы получить итератор по индексу, вы должны угадать его в этой викторине."
+                "Попытка %d / %d", n + 1, NUM_OF_TRIES);
+
+        for (size_t i = 0; i < index_len; ++i)
+        {
+            right_ans = index_str[i] - '0';
+            printf ("%s\nAnswer: ", QUESTIONS[i]);
+
+            scanf ("%d", &user_ans);
+
+            if (user_ans != right_ans)
+            {
+                right_guess = false;
+            }
+
+            if (rand () <= RAND_TRUE_MAX)
+            {
+                i = 0;
+                printf ("Извините, я перепутал ваши ответы, вам придется ответить заново\n\n");
+                right_guess = true;
+            }
+        }
+
+        if (right_guess == false)
+        {
+            printf ("Извините, ваши ответы неверные. Ah, shit, here we go again\n");
+        }
+        else
+        {
+            printf ("Ответы верны, индекс найден. Программа продожает исполнение\n");
+            return true;
+        }
+    }
+
+    printf ("Позовите кого-нибудь поумнее, пусть он и работает с этой программой\n");
+
+    return false;
 }
