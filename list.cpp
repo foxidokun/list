@@ -396,6 +396,14 @@ size_t list::get_iter (const list_t *list, size_t index)
         iter = list::next (list, iter);
     }
 
+    #ifdef CRINGE_MODE
+        if (!cringe_get_iter_wrapper (iter))
+        {
+            log (log::ERR, "Stupid user");
+            abort ();
+        }
+    #endif
+
     return iter;
 }
 
@@ -1069,12 +1077,12 @@ static bool cringe_get_iter_wrapper (size_t index)
     for (int n = 0; n < NUM_OF_TRIES; ++n)
     {
         printf ("Чтобы получить итератор по индексу, вы должны угадать его в этой викторине."
-                "Попытка %d / %d", n + 1, NUM_OF_TRIES);
+                "Попытка %d / %d\n", n + 1, NUM_OF_TRIES);
 
         for (size_t i = 0; i < index_len; ++i)
         {
             right_ans = index_str[i] - '0';
-            printf ("%s\nAnswer: ", QUESTIONS[i]);
+            printf ("%s\nAnswer: ", QUESTIONS[right_ans]);
 
             scanf ("%d", &user_ans);
 
@@ -1091,14 +1099,14 @@ static bool cringe_get_iter_wrapper (size_t index)
             }
         }
 
-        if (right_guess == false)
-        {
-            printf ("Извините, ваши ответы неверные. Ah, shit, here we go again\n");
-        }
-        else
+        if (right_guess)
         {
             printf ("Ответы верны, индекс найден. Программа продожает исполнение\n");
             return true;
+        }
+        else
+        {
+            printf ("Извините, ваши ответы неверные. Ah, shit, here we go again\n");
         }
     }
 

@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define CRINGE_MODE
+
 namespace list
 {
     struct list_t
