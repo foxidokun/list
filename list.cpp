@@ -1,4 +1,4 @@
-#include <assert.h>
+#include "lib/assert.h"
 #include <string.h>
 
 #include "include/common.h"
@@ -96,6 +96,7 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     assert (list != nullptr && "pointer can't be nullptr");
     assert (obj_size > 0 && "Object size can't be less than 1");
     assert (print_func != nullptr && "pointer can't be nullptr");
+    c_assert(0);
 
     //Nuke them
     list->data_arr = nullptr;
@@ -217,13 +218,13 @@ void list::print_errs (list::err_flags flags, FILE *file, const char *prefix)
 
     err_flags tmp_err = 0;
 
-    _PRINT_CASE (OOM,   "Out Of Memory");
-    _PRINT_CASE (EMPTY, "Empty list"   );
-    _PRINT_CASE (NULLPTR, "List pointer is nullptr");
-    _PRINT_CASE (INVALID_CAPACITY, "Invalid capacity");
-    _PRINT_CASE (INVALID_SIZE, "Invalid size");
-    _PRINT_CASE (BROKEN_DATA_LOOP, "Broken data loop");
-    _PRINT_CASE (BROKEN_FREE_LOOP, "Broken free loop");
+    _PRINT_CASE (OOM,              "Out Of Memory"          );
+    _PRINT_CASE (EMPTY,            "Empty list"             );
+    _PRINT_CASE (NULLPTR,          "List pointer is nullptr");
+    _PRINT_CASE (INVALID_CAPACITY, "Invalid capacity"       );
+    _PRINT_CASE (INVALID_SIZE,     "Invalid size"           );
+    _PRINT_CASE (BROKEN_DATA_LOOP, "Broken data loop"       );
+    _PRINT_CASE (BROKEN_FREE_LOOP, "Broken free loop"       );
 
     assert (flags == list::OK && "Unknow error flag");
 }

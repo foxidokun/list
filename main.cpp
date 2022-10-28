@@ -35,6 +35,7 @@ int main ()
         q = i;
         list::push_back (&list, &q);
         log (log::INF, "Push back q = %d", q);
+        list::graph_dump (&list);
     }
 
     graph_dump (&list);
@@ -42,18 +43,19 @@ int main ()
     for (int i = 0; i < 4; ++i)
     {
         list::pop_front (&list, &q);
-        log (log::INF, "q = %d", q);
+        log (log::INF, "Pop front q = %d", q);
+        list::graph_dump (&list);
     }
 
-    q = -0; list::push_back (&list, &q);
-    q = -1; iter = list::push_back (&list, &q);
-    q = -2; list::push_back (&list, &q);
-    q = -3; list::push_back (&list, &q);
+    q = -0; list::push_back (&list, &q);        list::graph_dump (&list);
+    q = -1; iter = list::push_back (&list, &q); list::graph_dump (&list);
+    q = -2; list::push_back (&list, &q);        list::graph_dump (&list);
+    q = -3; list::push_back (&list, &q);        list::graph_dump (&list);
 
-    q = -10; list::insert_after (&list, iter, &q);
-    q = -11; list::insert_after (&list, iter, &q);
-    q = -12; list::insert_after (&list, iter, &q);
-    q = -13; list::insert_after (&list, iter, &q);
+    q = -10; list::insert_after (&list, iter, &q); list::graph_dump (&list);
+    q = -11; list::insert_after (&list, iter, &q); list::graph_dump (&list);
+    q = -12; list::insert_after (&list, iter, &q); list::graph_dump (&list);
+    q = -13; list::insert_after (&list, iter, &q); list::graph_dump (&list);
 
     list::graph_dump (&list);
 
