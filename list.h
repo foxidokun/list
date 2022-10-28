@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define CRINGE_MODE
+//#define CRINGE_MODE
 
 namespace list
 {

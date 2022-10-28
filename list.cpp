@@ -387,7 +387,7 @@ size_t list::get_iter (const list_t *list, size_t index)
 
     if (list->is_sorted)
     {
-        return (list->next_arr[0] + index - 1) % list->capacity + 1;
+        return list->next_arr[0] + index;
     }
 
     size_t iter = list::head (list);
@@ -882,7 +882,9 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
 static void set_colors (const list::list_t *list, size_t index,
                         const char **fillcolor, const char **color)
 {
-    assert (list != nullptr && "invalid pointer");
+    assert (list      != nullptr && "invalid pointer");
+    assert (fillcolor != nullptr && "invalid pointer");
+    assert (color     != nullptr && "invalid pointer");
 
     if (index == 0)
     {
@@ -1018,9 +1020,9 @@ static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity
     char *new_data = (char *) calloc (new_capacity + 1, list->obj_size);
     if (new_data == nullptr) { return list::OOM; }
 
-    char *new_elem_ptr   = new_data;
-    char *old_elem_ptr   = nullptr;
-    size_t index         = 0;
+    char *new_elem_ptr = new_data;
+    char *old_elem_ptr = nullptr;
+    size_t index       = 0;
 
     // Copy to new buffer
     for (size_t i = 0; i < list->size; ++i)
@@ -1030,7 +1032,11 @@ static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity
         new_elem_ptr += list->obj_size;
 
         memcpy (new_elem_ptr, old_elem_ptr, list->obj_size);
+    }
 
+    // Recreate indexes
+    for (size_t i = 0; i < list->size; ++i)
+    {
         list->next_arr[i + 1] = i + 2;
         list->prev_arr[i + 1] = i;
     }
