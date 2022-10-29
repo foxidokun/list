@@ -80,7 +80,7 @@ int test_push_get ()
     TEST_START();
 
     val = 228;
-    size_t index = list::push_front (&list, &val);
+    list::iter_t index = list::push_front (&list, &val);
 
     val = 0;
     list::get (&list, index, &val);
@@ -94,7 +94,7 @@ int test_push_pop ()
     TEST_START();
 
     val = 1;
-    size_t index = list::push_front (&list, &val);
+    list::iter_t index = list::push_front (&list, &val);
     val = 2;
     list::push_front (&list, &val);
     val = 3;
@@ -111,94 +111,6 @@ int test_push_pop ()
     TEST_END();
 }
 
-int test_sort ()
-{
-    TEST_START();
-
-    val = 1; list::push_back  (&list, &val);
-    val = 2; list::push_back  (&list, &val);
-    val = 0; list::push_front (&list, &val);
-
-    _ASSERT (list.is_sorted == false);
-    _ASSERT (list::get_iter (&list, 0) == 3);
-    _ASSERT (list::get_iter (&list, 1) == 1);
-    _ASSERT (list::get_iter (&list, 2) == 2);
-
-    TEST_END();
-}
-
-int test_sorted_flag_pop_back ()
-{
-    TEST_START();
-
-    val = 1; list::push_back  (&list, &val);
-    val = 2; list::push_back  (&list, &val);
-    val = 0; list::pop_back   (&list, &val);
-
-    _ASSERT (list.is_sorted == true);
-
-    TEST_END();
-}
-
-int test_sorted_flag_pop_front ()
-{
-    TEST_START();
-
-    val = 1; list::push_back  (&list, &val);
-    val = 2; list::push_back  (&list, &val);
-    val = 0; list::pop_front   (&list, &val);
-
-    _ASSERT (list.is_sorted == true);
-
-    TEST_END();
-}
-
-
-int test_sorted_pop_push_front ()
-{
-    TEST_START();
-
-    val = 1; list::push_back  (&list, &val);
-    val = 2; list::push_back  (&list, &val);
-    val = 0; list::pop_front  (&list, &val);
-    val = 3; list::push_front (&list, &val);
-
-    _ASSERT (list.is_sorted == true);
-
-    _ASSERT (list::get_iter (&list, 0) == 1);
-    _ASSERT (list::get_iter (&list, 1) == 2);
-
-    TEST_END();
-}
-
-int test_sorted_pop_push_back ()
-{
-    TEST_START();
-
-    val = 1; list::push_back  (&list, &val);
-    val = 2; list::push_back  (&list, &val);
-    val = 0; list::pop_front  (&list, &val);
-    val = 3; list::push_front (&list, &val);
-
-    _ASSERT (list.is_sorted == true);
-
-    TEST_END();
-}
-
-int test_sorted_with_shift ()
-{
-    TEST_START ();
-
-    val = 1; list::push_back (&list, &val);
-    val = 2; list::push_back (&list, &val);
-    val = 3; list::push_back (&list, &val);
-    val = 0; list::pop_front (&list, &val);
-    val = 4; list::push_back (&list, &val);
-
-    _ASSERT (list.is_sorted == false);
-
-    TEST_END ();
-}
 // ----------------------------------------------------------------------------
 
 void run_tests ()
@@ -212,12 +124,6 @@ void run_tests ()
     _TEST (test_ctor_verify_empty ());
     _TEST (test_push_get ());
     _TEST (test_push_pop ());
-    _TEST (test_sort ());
-    _TEST (test_sorted_flag_pop_back ());
-    _TEST (test_sorted_flag_pop_front ());
-    _TEST (test_sorted_pop_push_front ());
-    _TEST (test_sorted_pop_push_back ());
-    _TEST (test_sorted_with_shift ());
 
 
     log (log::INF, "Tests total: %u, failed %u, success: %u, success ratio: %3.1lf%%",

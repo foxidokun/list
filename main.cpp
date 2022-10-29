@@ -25,7 +25,7 @@ int main ()
 
     list::list_t list;
     list::ctor (&list, sizeof (int), 10, print_int);
-    size_t iter = 0;
+    list::iter_t iter = 0;
 
     // Push back
     int q = 0;
@@ -55,13 +55,6 @@ int main ()
     q = -11; list::insert_after (&list, iter, &q); list::graph_dump (&list, "Insert after %zu q = %d", iter, q);
     q = -12; list::insert_after (&list, iter, &q); list::graph_dump (&list, "Insert after %zu q = %d", iter, q);
     q = -13; list::insert_after (&list, iter, &q); list::graph_dump (&list, "Insert after %zu q = %d", iter, q);
-
-    list::graph_dump (&list, "Before sort");
-
-    log (log::DBG, "SORT");
-    list::sort (&list);
-
-    list::graph_dump (&list, "After sort");
 
     log (log::INF, "-2 iter = %zu\n", list::get_iter (&list, 2));
 

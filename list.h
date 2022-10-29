@@ -9,24 +9,25 @@
 
 namespace list
 {
+
+    struct node_t
+    {
+        void   *value;
+        node_t *next;
+        node_t *prev;
+    };
+
     struct list_t
     {
-        void   *data_arr;
-        size_t *prev_arr;
-        size_t *next_arr;
+        node_t *null_node;
 
-        size_t free_head;
-        size_t free_back;
-        
         size_t obj_size;
-        size_t reserved;
-        size_t capacity;
         size_t size;
-
-        bool is_sorted;
 
         void (*print_func)(void *elem, FILE *stream);
     };
+
+    typedef node_t* iter_t;
 
     typedef uint8_t err_flags; 
 
@@ -52,35 +53,30 @@ namespace list
 
     void print_errs (err_flags flags, FILE *file, const char *prefix);
 
-    ssize_t insert_after (list_t *list, size_t index, const void *elem);
+    iter_t insert_after (list_t *list, iter_t index, const void *elem);
 
-    ssize_t insert_before (list_t *list, size_t index, const void *elem);
+    iter_t insert_before (list_t *list, iter_t index, const void *elem);
 
-    ssize_t push_front (list_t *list, const void *elem);
+    iter_t push_front (list_t *list, const void *elem);
 
-    ssize_t push_back  (list_t *list, const void *elem);
+    iter_t push_back  (list_t *list, const void *elem);
 
-    void get (list_t *list, size_t index, void *elem);
+    void get (list_t *list, iter_t index, void *elem);
 
-    void remove (list_t *list, size_t index, void *elem);
+    void remove (list_t *list, iter_t index, void *elem);
     void pop_back  (list_t *list, void *elem);
     void pop_front (list_t *list, void *elem);
 
-    size_t next (const list_t *list, size_t index);
-    size_t prev (const list_t *list, size_t index);
+    iter_t next (const list_t *list, iter_t index);
+    iter_t prev (const list_t *list, iter_t index);
 
-    size_t head (const list_t *list);
-    size_t tail (const list_t *list);
+    iter_t head (const list_t *list);
+    iter_t tail (const list_t *list);
 
-    size_t get_iter (const list_t *list, size_t index);
-
-    err_t resize (list_t *list, size_t new_capacity, bool linearise = false);
-
-    err_t sort (list_t *list);
+    iter_t get_iter (const list_t *list, size_t index);
 
     const char *err_to_str (const err_t err);
 
-    void dump (const list_t *list, FILE *stream = stdout);
     void graph_dump (const list::list_t *list, const char *reason_fmt, ...);
 }
 
@@ -93,7 +89,6 @@ namespace list
             log(log::ERR,                                           \
                 "Invalid list with errors: ");                      \
             list::print_errs (check_res, get_log_stream(), "\t-> ");\
-            list::dump (list, get_log_stream());                    \
             fflush (get_log_stream());                              \
             assert (0 && "Invalid list");                           \
         }                                                           \

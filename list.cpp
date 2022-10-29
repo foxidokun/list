@@ -60,24 +60,16 @@ const int NUM_OF_TRIES  = 3;
 }
 
 static list::err_t recalloc_no_sorting  (list::list_t *list, size_t new_capacity);
-static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity);
 
-static ssize_t get_free_cell (list::list_t *list);
-static void release_free_cell (list::list_t *list, size_t index);
-
-static bool check_cell  (const list::list_t *list, size_t index);
-static bool check_index  (const list::list_t *list, size_t index, bool can_be_zero);
+static bool check_cell  (const list::list_t *list, list::iter_t index);
 static void verify_data_loop  (const list::list_t *list, list::err_flags *flags);
-static void verify_free_loop  (const list::list_t *list, list::err_flags *flags);
 
 static void generate_graphiz_code (const list::list_t *list, FILE *stream);
-static void set_colors (const list::list_t *list, size_t index,
+static void set_colors (const list::list_t *list, list::iter_t index,
                         const char **fillcolor, const char **color);
-static void node_codegen (const list::list_t *list, size_t index, const char *fillcolor,
+static void node_codegen (const list::list_t *list, list::iter_t iter, size_t index, const char *fillcolor,
                           const char *color, FILE *stream);
-static void edge_codegen (const list::list_t *list, size_t index, FILE *stream);
-
-static bool cringe_get_iter_wrapper (size_t index);
+static void edge_codegen (const list::list_t *list, list::iter_t iter, size_t index, FILE *stream);
 
 // ----------------------------------------------------------------------------
 // PUBLIC FUNCTIONS
@@ -99,48 +91,25 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     assert (print_func != nullptr && "pointer can't be nullptr");
 
     //Nuke them
-    list->data_arr = nullptr;
-    list->prev_arr = nullptr;
-    list->next_arr = nullptr;
+    list->null_node = nullptr;
 
     // Allocate null object + reserved
-    list->data_arr = calloc (reserved + 1, obj_size);
-    _UNWRAP_MALLOC_GOTO (list->data_arr);
-
-    list->prev_arr = (size_t*) calloc (reserved + 1, sizeof (size_t)); 
-    _UNWRAP_MALLOC_GOTO (list->prev_arr);
-
-    list->next_arr = (size_t*) calloc (reserved + 1, sizeof (size_t)); 
-    _UNWRAP_MALLOC_GOTO (list->next_arr);
+    list->null_node = (node_t *)calloc (sizeof (node_t) + obj_size, 1);
+    _UNWRAP_MALLOC_GOTO (list->null_node);
 
     // Init fields
     list->obj_size   = obj_size;
-    list->reserved   = reserved;
-    list->capacity   = reserved;
     list->size       = 0;
-    list->is_sorted  = true;
     list->print_func = print_func;
 
     // Init null cell
-    list->prev_arr[0] = 0;
-    list->next_arr[0] = 0;
-
-    // Init free cells
-    for (size_t i = 1; i <= reserved; ++i)
-    {
-        list->next_arr[i] = i + 1;
-        list->prev_arr[i] = FREE_PREV;
-    }
-    list->next_arr[reserved] = 0;
-    list->free_head          = (reserved > 0) ? 1 : 0;
-    list->free_back          = reserved;
+    list->null_node->prev  = list->null_node;
+    list->null_node->next  = list->null_node;
 
     return list::OK;
 
     failed_malloc_cleanup:
-        free (list->data_arr);
-        free (list->prev_arr);
-        free (list->next_arr);
+        free (list->null_node);
         return list::OOM;
 }
 
@@ -158,9 +127,15 @@ void list::dtor (list_t *list)
         list::print_errs (verify (list), get_log_stream(), "-->\t");
     }
 
-    free (list->data_arr);
-    free (list->prev_arr);
-    free (list->next_arr);
+    node_t *next_node = list->null_node;
+    for (size_t i = 0; i < list->size; ++i)
+    {
+        next_node = next_node->next;
+
+        free (next_node->prev);
+    }
+
+    free (next_node);
 }
 
 // ----------------------------------------------------------------------------
@@ -174,20 +149,9 @@ list::err_flags list::verify (const list_t *list)
 
     list::err_flags flags = list::OK;
 
-    if (list->capacity < list->reserved)
-    {
-        flags |= list::INVALID_CAPACITY;
-    }
-
-    if (list->size > list->capacity)
-    {
-        flags |= list::INVALID_SIZE;
-    }
-
     if (flags == list::OK)
     {
         verify_data_loop (list, &flags);
-        verify_free_loop (list, &flags);
     }
 
     return flags;
@@ -231,97 +195,84 @@ void list::print_errs (list::err_flags flags, FILE *file, const char *prefix)
 
 // ----------------------------------------------------------------------------
 
-ssize_t list::insert_after (list_t *list, size_t index, const void *elem)
+list::iter_t list::insert_after (list_t *list, iter_t cur_cell, const void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
-    assert (check_index (list, index, true) && "invalid index");
 
     // Find free cell
-    ssize_t free_index_tmp = get_free_cell (list);
-    if (free_index_tmp == -1) return -1;
-
-    size_t free_index = (size_t) free_index_tmp;
-
-    if (free_index != index + 1)
-    {
-        list->is_sorted = false;
-    }
-
+    node_t *new_cell = (node_t *) calloc (sizeof (node_t) + list->obj_size, 1);
+    if (new_cell == nullptr) return nullptr;
+    
     // Copy data
-    char *cell_data_ptr = (char *)list->data_arr +
-                                free_index * list->obj_size;
-    memcpy (cell_data_ptr, elem, list->obj_size);
+    memcpy (new_cell+1, elem, list->obj_size);
+    new_cell->value = new_cell + 1;
 
     // Update pointers
-    list->prev_arr[list->next_arr[index]] = free_index;
-    list->next_arr[free_index] = list->next_arr[index];
-    list->prev_arr[free_index] = index;
-    list->next_arr[index]      = free_index;
+    cur_cell->next->prev = new_cell;
+    new_cell->next       = cur_cell->next;
+    new_cell->prev       = cur_cell;
+    cur_cell->next       = new_cell;
 
-    return (ssize_t) free_index;
+    list->size++;
+
+    return new_cell;
 }
 
-ssize_t list::insert_before (list_t *list, size_t index, const void *elem)
+list::iter_t list::insert_before (list_t *list, iter_t cur_cell, const void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
-    assert (check_index (list, index, true) && "invalid index");
 
-    return list::insert_after (list, list->prev_arr[index], elem);
+    return list::insert_after (list, cur_cell->prev, elem);
 }
 
-ssize_t list::push_back (list_t *list, const void *elem)
+list::iter_t list::push_back (list_t *list, const void *elem)
 {
     assert (list != nullptr && "pointer can't be null");
     assert (elem != nullptr && "pointer can't be null");
     list_assert (list);
 
-    return list::insert_before (list, 0, elem);
+    return list::insert_before (list, list->null_node, elem);
 }
 
-ssize_t list::push_front (list_t *list, const void *elem)
+list::iter_t list::push_front (list_t *list, const void *elem)
 {
     assert (list != nullptr && "pointer can't be null");
     assert (elem != nullptr && "pointer can't be null");
     list_assert (list);
 
-    return list::insert_after (list, 0, elem);
+    return list::insert_after (list, list->null_node, elem);
 }
 
 // ----------------------------------------------------------------------------
 
-void list::get (list_t *list, size_t index, void *elem)
+void list::get (list_t *list, iter_t index, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
-    assert (check_index (list, index, false) && "invalid index");
 
-    void *val_ptr = (char *)list->data_arr + list->obj_size * index;
-    memcpy (elem, val_ptr, list->obj_size);
+    memcpy (elem, index+1, list->obj_size);
 }
 
 // ----------------------------------------------------------------------------
 
-void list::remove (list_t *list, size_t index, void *elem)
+void list::remove (list_t *list, iter_t index, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
-    assert (check_index (list, index, false) && "invalid index");
-
-    if (list->prev_arr[index] != 0 && list->next_arr[index] != 0)
-    {
-        list->is_sorted = false;
-    }
+    assert (index != list->null_node && "Invalid operation");
 
     list::get (list, index, elem);
-    list->next_arr[list->prev_arr[index]] = list->next_arr[index];
-    list->prev_arr[list->next_arr[index]] = list->prev_arr[index];
-    release_free_cell (list, index);
+    index->prev->next = index->next;
+    index->next->prev = index->prev;
+    free (index);
+
+    list->size--;
 }
 
 void list::pop_front (list_t *list, void *elem)
@@ -330,7 +281,7 @@ void list::pop_front (list_t *list, void *elem)
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
 
-    list::remove (list, list::next (list, 0), elem);
+    list::remove (list, list::next (list, list->null_node), elem);
 }
 
 void list::pop_back (list_t *list, void *elem)
@@ -339,206 +290,58 @@ void list::pop_back (list_t *list, void *elem)
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
 
-    list::remove (list, list::prev (list, 0), elem);
+    list::remove (list, list::prev (list, list->null_node), elem);
 }
 
 // ----------------------------------------------------------------------------
 
-size_t list::next (const list_t *list, size_t index)
+list::iter_t list::next (const list_t *list, iter_t index)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     list_assert (list);
-    assert (check_index (list, index, true) && "invalid index");
 
-    return list->next_arr[index];
+    return index->next;
 }
 
-size_t list::prev (const list_t *list, size_t index)
+list::iter_t list::prev (const list_t *list, iter_t index)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     list_assert (list);
-    assert (check_index (list, index, true) && "invalid index");
 
-    return list->prev_arr[index];
+    return index->prev;
 }
 
-size_t list::head (const list_t *list)
+list::iter_t list::head (const list_t *list)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     list_assert (list);
 
-    return list::next (list, 0);
+    return list::next (list, list->null_node);
 }
 
-size_t list::tail (const list_t *list)
+list::iter_t list::tail (const list_t *list)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     list_assert (list);
 
-    return list::prev (list, 0);
+    return list::prev (list, list->null_node);
 }
 
 // ----------------------------------------------------------------------------
 
-size_t list::get_iter (const list_t *list, size_t index)
+list::iter_t list::get_iter (const list_t *list, size_t index)
 {
     assert (list != nullptr && "pointer can't be null");
     list_assert (list);
     assert (index < list->size && "index out of bounds");
 
-    if (list->is_sorted)
-    {
-        return list->next_arr[0] + index;
-    }
-
-    size_t iter = list::head (list);
+    iter_t iter = list::head (list);
     for (size_t i = 0; i < index; ++i)
     {
         iter = list::next (list, iter);
     }
 
-    #ifdef CRINGE_MODE
-        if (!cringe_get_iter_wrapper (iter))
-        {
-            log (log::ERR, "Stupid user");
-            abort ();
-        }
-    #endif
-
     return iter;
-}
-
-// ----------------------------------------------------------------------------
-
-#define _UNWRAP(expr)       \
-{                           \
-    tmp_res = (expr);       \
-    if (tmp_res != list::OK)\
-    {                       \
-        return tmp_res;     \
-    }                       \
-}
-
-list::err_t list::resize (list::list_t *list, size_t new_capacity, bool linearise)
-{
-    assert (list != nullptr && "poointer can't be nullptr");
-    list_assert (list);
-    assert (new_capacity > list->capacity && "current implementation can't shrink");
-
-    list::err_t tmp_res = list::OK;
-
-    // Realloc stack
-    if (linearise)
-    {
-        _UNWRAP (recalloc_and_sorting(list, new_capacity));
-    }
-    else
-    {
-        _UNWRAP (recalloc_no_sorting (list, new_capacity));
-    }
-
-    for (size_t i = list->capacity + 1; i < new_capacity + 1; ++i)
-    {
-        list->prev_arr[i] = FREE_PREV;
-        list->next_arr[i] = i + 1;
-    }
-
-    if (list->free_back != 0)
-    {
-        list->next_arr[list->free_back] = list->capacity + 1;
-    }
-
-    list->next_arr[new_capacity] = 0;
-    list->free_back = new_capacity;
-
-    if (list->free_head == 0)
-    {
-        list->free_head = list->capacity + 1;
-    }
-
-    list->capacity  = new_capacity;
-
-    return list::OK;
-}
-
-
-// ----------------------------------------------------------------------------
-
-#define _UNWRAP(expr)       \
-{                           \
-    tmp_res = (expr);       \
-    if (tmp_res != list::OK)\
-    {                       \
-        return tmp_res;     \
-    }                       \
-}
-
-list::err_t list::sort (list::list_t *list)
-{
-    assert (list != nullptr && "poointer can't be nullptr");
-    list_assert (list);
-
-    list::err_t tmp_res = list::OK;
-
-    _UNWRAP(recalloc_and_sorting (list, list->capacity));
-
-    return list::OK;
-}
-
-
-// ----------------------------------------------------------------------------
-
-void list::dump (const list::list_t *list, FILE *stream)
-{
-    assert (list != nullptr   && "pointer can't be nullptr");
-    assert (stream != nullptr && "pointer can't be nullptr");
-
-    fprintf (stream, "List dump:\n");
-
-    fprintf (stream, "\tfree_head: %zu\n", list->free_head);
-    fprintf (stream, "\tobj_size:  %zu\n", list->obj_size);
-    fprintf (stream, "\treserved:  %zu\n", list->reserved);
-    fprintf (stream, "\tcapacity:  %zu\n", list->capacity);
-    fprintf (stream, "\tsize:      %zu\n", list->size);
-
-    fprintf(stream ,"INDX: ");
-    for (size_t i = 0; i <= list->capacity; ++i)
-    {
-        fprintf (stream, "%3zu ", i);
-    }
-
-    fprintf (stream, "\nData: ");
-    for (size_t i = 0; i <= list->capacity; ++i)
-    {
-        if (list->prev_arr[i] != FREE_PREV)
-        {
-            fprintf (stream, "%3d ", ((int *)list->data_arr)[i]);
-        }
-        else
-        {
-            fprintf (stream, "  F ");
-        }
-    }
-
-    fprintf (stream, "\nPrev: ");
-    for (size_t i = 0; i <= list->capacity; ++i)
-    {
-        if (list->prev_arr[i] == FREE_PREV)
-        {
-            fprintf (stream, "  F ");
-        }
-        else
-        {
-            fprintf (stream, "%3zu ", list->prev_arr[i]);
-        }
-    }
-
-    fprintf (stream, "\nNext: ");
-    for (size_t i = 0; i <= list->capacity; ++i)
-    {
-        fprintf (stream, "%3zd ", (ssize_t) list->next_arr[i]);
-    }
-    fputc ('\n', stream);
 }
 
 // ----------------------------------------------------------------------------
@@ -627,118 +430,17 @@ const char *list::err_to_str (const list::err_t err)
 // STATIC FUNCTIONS
 // ----------------------------------------------------------------------------
 
-static ssize_t get_free_cell (list::list_t *list)
-{
-    assert (list != nullptr && "pointer can't be nullptr");
-
-    list::err_t res = list::OK;
-
-    // If we need reallocation
-    if (list->free_head == 0) 
-    {
-        if (list->capacity == 0)
-        {
-            res = list::resize (list, 1);
-        }
-        else
-        {
-            res = list::resize (list, list->capacity * 2);
-        }
-
-
-        if (res != list::OK)
-        {
-            log (log::ERR, "Failed to reallocate with error '%s'", list::err_to_str (res));
-            return ERROR;
-        }
-    }
-
-    size_t free_index = list->free_head;
-
-    list->free_head = list->next_arr[list->free_head];
-
-    if (list->free_head == 0)
-    {
-        list->free_back = 0;
-    }
-
-    list->size++;
-
-    return (ssize_t) free_index;
-}
-
-static void release_free_cell (list::list_t *list, size_t index)
-{
-    assert (list != nullptr && "pointer can't be nullptr");
-    assert (check_index (list, index, false) && "invalid index");
-
-    list->next_arr[index] = list->free_head;
-    list->prev_arr[index] = FREE_PREV;
-    list->free_head       = index;
-    list->size--;
-}
-
-// ----------------------------------------------------------------------------
-
-#define _ERR_CASE(cond, msg)                        \
-{                                                   \
-    if (cond)                                       \
-    {                                               \
-        log (log::DBG, "Invalid index (%s)", msg);  \
-        return false;                               \
-    }                                               \
-}
-
-static bool check_index (const list::list_t *list, size_t index, bool can_be_zero)
-{
-    assert (list != nullptr && "pointer can't be nullptr");
-
-    _ERR_CASE (!can_be_zero && index == 0, "null");
-    _ERR_CASE (index > list->capacity, "out of bounds");
-    _ERR_CASE (list->prev_arr[index] == FREE_PREV, "points to free cell");
-
-    return true;
-}
-
-#undef _ERR_CASE
-
-// ----------------------------------------------------------------------------
-
-static bool check_cell (const list::list_t *list, size_t index)
+static bool check_cell (const list::list_t *list, list::iter_t index)
 {
     assert (list != nullptr && "pointer can't be null");
 
-    if (!check_index (list, index, false))
-    {
-        log (log::DBG, "current index is incorrect");
-        return false;
-    }
-
-    if (list->prev_arr[index] == FREE_PREV)
-    {
-        log (log::ERR, "Free cell");
-        return false;
-    }
-
-    if (!check_index (list, list->next_arr[index], true))
-    {
-        log (log::ERR, "next index is incorrect");
-        return false;
-    }
-
-    if (!check_index (list, list->prev_arr[index], true))
-    {
-        log (log::ERR, "prev index is incorrect");
-        return false;
-    }
-
-    if (list->next_arr[list->prev_arr[index]] != index)
+    if (index->prev->next != index)
     {
         log (log::ERR, "next[prev[index]] != index");
         return false;
     }
 
-    if (list->prev_arr[list->next_arr[index]] != index)
+    if (index->next->prev != index)
     {
         log (log::ERR, "prev[next[index]] != index");
         return false;
@@ -754,21 +456,15 @@ static void verify_data_loop  (const list::list_t *list, list::err_flags *flags)
     assert (list  != nullptr && "pointer can't be nullptr");
     assert (flags != nullptr && "pointer can't be nullptr");
 
-    size_t index = list->next_arr[0];
-
-    if (!check_index (list, index, true))
-    {
-        *flags |= list::BROKEN_DATA_LOOP;
-        return;
-    }
+    list::iter_t index = list->null_node->next;
 
     if (*flags == list::OK && list->size > 0)
     {
-        for (size_t i = 0; i < list->size - 1; ++i)
+        for (size_t i = 0; i + 1 < list->size; ++i)
         {
             if (check_cell (list, index))
             {
-                index = list->next_arr[index];
+                index = index->next;
             }
             else
             {
@@ -779,74 +475,12 @@ static void verify_data_loop  (const list::list_t *list, list::err_flags *flags)
         }
     }
 
-    if (list->next_arr[index] != 0)
+    if (index->next != list->null_node)
     {
         log (log::ERR, "Invalid loop size, last index is %zu", index);
         *flags |= list::BROKEN_DATA_LOOP;
         return;
     }   
-}
-
-// ----------------------------------------------------------------------------
-
-static void verify_free_loop  (const list::list_t *list, list::err_flags *flags)
-{
-    assert (list  != nullptr && "pointer can't be nullptr");
-    assert (flags != nullptr && "pointer can't be nullptr");
-
-    size_t index = list->free_head;
-
-    // Verify head
-
-    if (index > list->capacity)
-    {
-        log (log::ERR, "Free head out of bounds");
-        *flags |= list::BROKEN_FREE_LOOP;
-        return;
-    }
-
-    if (index == 0)
-    {
-        if (list->size != list->capacity)
-        {
-            log (log::ERR, "No free cells, but size != capacity");
-            *flags |= list::BROKEN_FREE_LOOP;
-            return;
-        }
-        else
-        {
-            return;
-        }
-    }
-
-    // Iterate
-
-    for (size_t i = 0; i < list->capacity - list->size; ++i)
-    {
-        if (list->prev_arr[index] != FREE_PREV)
-        {
-            log (log::ERR, "Invalid free cell %zu", i);
-            return;
-        }
-
-        index = list->next_arr[index];
-
-        if (index > list->capacity)
-        {
-            log (log::ERR, "Next index out of bounds");
-            *flags |= list::BROKEN_FREE_LOOP;
-            return;
-        }
-    }
-
-    // Check loop
-
-    if (index != 0)
-    {
-        log (log::ERR, "Broken free loop, index = %zu", index);
-        *flags |= list::BROKEN_FREE_LOOP;
-        return;
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -863,31 +497,32 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     fprintf (get_log_stream(), "\n<hr>\n");
 
     fprintf (stream, "node_main [label = \" "
-                    "   capacity: %zu | obj_size: %zu | is_sorted: %s (%d)"
-                      "| reserved: %zu | size: %zu|<fh>free_head: %zu | <fb> free_back: %zu\"]\n",
-                      list->capacity, list->obj_size, list->is_sorted ? "true" : "false", list->is_sorted,
-                      list->reserved, list->size, list->free_head, list->free_back);
+                    "   obj_size: %zu "
+                      "| size: %zu\"]\n",
+                      list->obj_size, list->size);
 
-    fprintf (stream, "node_main:fb -> node_%zu [style=\"dotted\", color = \"skyblue\"]", list->free_back);
-    fprintf (stream, "node_main:fh -> node_%zu [style=\"dotted\", color = \"skyblue\"]", list->free_head);
-    fprintf (stream, "node_main    -> node_0   [style=\"invis\", weight=100]");
+    fprintf (stream, "node_main    -> node_0   [style=\"invis\", weight=100]\n");
 
     fprintf (stream, "node_ind_struct [label=\"STRUCT\", fillcolor=\"white\"]\n");
     fprintf (stream, "node_ind_struct -> node_ind_0 [style=\"invis\", weight = 100]\n");
 
 
-    for (size_t i = 0; i < list->capacity +1; ++i)
+    list::iter_t index = list->null_node;
+
+    for (size_t i = 0; i < list->size + 1; ++i)
     {
         // Set colors
-        set_colors (list, i, &fillcolor, &color);
+        set_colors (list, index, &fillcolor, &color);
 
-        fprintf (stream, "node_ind_%zu [label=\"%zu\", fillcolor=\"white\"]", i, i);
+        fprintf (stream, "node_ind_%zu [label=\"%zu\", fillcolor=\"white\"]\n", i, i);
 
         // Print node
-        node_codegen (list, i, fillcolor, color, stream);
+        node_codegen (list, index, i, fillcolor, color, stream);
 
         // Generate edges
-        edge_codegen (list, i, stream);
+        edge_codegen (list, index, i, stream);
+
+        index = index->next;
     }
 
     fprintf (stream ,"}");
@@ -895,7 +530,7 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
 
 // ----------------------------------------------------------------------------
 
-static void set_colors (const list::list_t *list, size_t index,
+static void set_colors (const list::list_t *list, list::iter_t index,
                         const char **fillcolor, const char **color)
 {
     assert (list      != nullptr && "invalid pointer");
@@ -906,11 +541,6 @@ static void set_colors (const list::list_t *list, size_t index,
     {
         *color     = NULLCELL_COLOR;
         *fillcolor = NULLCELL_FILLCOLOR;
-    }
-    else if (list->prev_arr[index] == FREE_PREV)
-    {
-        *color     = FREE_COLOR;
-        *fillcolor = FREE_FILLCOLOR;
     }
     else if (check_cell (list, index) || index == 0)
     {
@@ -926,7 +556,7 @@ static void set_colors (const list::list_t *list, size_t index,
 
 // ----------------------------------------------------------------------------
 
-static void node_codegen (const list::list_t *list, size_t index, const char *fillcolor,
+static void node_codegen (const list::list_t *list, list::iter_t iter, size_t index, const char *fillcolor,
                         const char *color, FILE *stream)
 {
     assert (list      != nullptr && "invalid pointer");
@@ -934,207 +564,43 @@ static void node_codegen (const list::list_t *list, size_t index, const char *fi
     assert (color     != nullptr && "invalid pointer");
     assert (stream    != nullptr && "invalid pointer");
 
-    bool is_free = list->prev_arr[index] == FREE_PREV;
-
-    if (is_free)
+    fprintf (stream, "node_%zu [label = \"", index);
+    if (index != 0)
     {
-        fprintf (stream, "node_%zu [label = \"FREE | FREE", index);
+        list->print_func (iter->value, stream);
     }
     else
     {
-        fprintf (stream, "node_%zu [label = \"", index);
-        if (index != 0)
-        {
-            list->print_func ((char *)list->data_arr + index*list->obj_size, stream);
-        }
-        else
-        {
-            fprintf (stream, "nil"); 
-        }
-        fprintf (stream, "| p: %zu", list->prev_arr[index]);
+        fprintf (stream, "nil"); 
     }
-    
-    fprintf (stream, "| <next> n: %zu", list->next_arr[index]);
     fprintf (stream, "\"fillcolor=\"%s\", color=\"%s\"];\n",
                          fillcolor, color);
 }
 
 // ----------------------------------------------------------------------------
 
-static void edge_codegen (const list::list_t *list, size_t index, FILE *stream)
+static void edge_codegen (const list::list_t *list, list::iter_t iter, size_t index, FILE *stream)
 {
     assert (list   != nullptr && "pointer can't be nullptr");
     assert (stream != nullptr && "pointer can't be nullptr");
 
-    bool is_free = list->prev_arr[index] == FREE_PREV;
-
-
     // Invisible edge
-    if (index < list->capacity)
+
+    if (index < list->size)
     {
-        fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 60]\n",
-                    index, index+1);
+        fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 100]\n",
+            index, index + 1);
         fprintf (stream, "node_ind_%zu->node_ind_%zu [style=invis, weight = 100]\n",
-                    index, index+1);
+                    index, index + 1);
     }
 
     // Prev edge
-    if (!is_free)
-    {
-        fprintf (stream, "node_%zu -> node_%zu[color = \"%s\","
-                         "constraint=false];\n", index, list->prev_arr[index],
-                         PREV_EDGE_COLOR);
-    }
+    fprintf (stream, "node_%zu -> node_%zu[color = \"%s\","
+                     "constraint=false];\n", index, index == 0 ? list->size : index - 1,
+                     PREV_EDGE_COLOR);
 
     // Next edge
-    if (is_free)
-    {
-        fprintf (stream, "node_%zu -> node_%zu[color = \"%s\", style=\"dashed\","
-                         "constraint=false];\n", index, list->next_arr[index],
-                         NEXT_EDGE_COLOR);
-    }
-    else
-    {
-        fprintf (stream, "node_%zu -> node_%zu[color = \"%s\","
-                         "constraint=false];\n", index, list->next_arr[index],
-                         NEXT_EDGE_COLOR);
-    }   
-}
-
-// ----------------------------------------------------------------------------
-
-#define _REALLOC(ptr, size, type)                              \
-{                                                              \
-    tmp_ptr = realloc (ptr, (new_capacity + 1) * size);        \
-    UNWRAP_MALLOC (tmp_ptr);                                   \
-    _Pragma ("GCC diagnostic push")                            \
-    _Pragma ("GCC diagnostic ignored \"-Wuseless-cast\"")      \
-    ptr = (type) tmp_ptr;                                      \
-    _Pragma ("GCC diagnostic pop")                             \
-}
-
-static list::err_t recalloc_no_sorting  (list::list_t *list, size_t new_capacity)
-{
-    assert (list != nullptr && "pointer can't be null");
-
-    // Realocate arrays
-    void *tmp_ptr = nullptr;
-
-    _REALLOC (list->data_arr,  list->obj_size, void   *);
-    _REALLOC (list->next_arr, sizeof (size_t), size_t *);
-    _REALLOC (list->prev_arr, sizeof (size_t), size_t *);
-
-    return list::OK;
-}
-
-#undef _REALLOC
-
-// ----------------------------------------------------------------------------
-
-static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity)
-{
-    assert (list != nullptr && "pointer can't be null");
-
-    char *new_data = (char *) calloc (new_capacity + 1, list->obj_size);
-    if (new_data == nullptr) { return list::OOM; }
-
-    char *new_elem_ptr = new_data;
-    char *old_elem_ptr = nullptr;
-    size_t index       = 0;
-
-    // Copy to new buffer
-    for (size_t i = 0; i < list->size; ++i)
-    {
-        index = list->next_arr[index];
-        old_elem_ptr  = (char*)list->data_arr + index * list->obj_size;
-        new_elem_ptr += list->obj_size;
-
-        memcpy (new_elem_ptr, old_elem_ptr, list->obj_size);
-    }
-
-    // Recreate indexes
-    for (size_t i = 0; i < list->size; ++i)
-    {
-        list->next_arr[i + 1] = i + 2;
-        list->prev_arr[i + 1] = i;
-    }
-
-    // Loop
-    list->prev_arr[0] = list->size;
-    list->next_arr[0] = 1;
-    list->next_arr[list->size] = 0;
-
-    // Recreate free loop
-    if (list->free_head != 0)
-    {
-        list->free_head = list->size + 1;
-        list->free_back = list->capacity;
-
-        for (size_t i = list->size + 1; i < list->capacity + 1; ++i)
-        {
-            list->prev_arr[i] = FREE_PREV;
-            list->next_arr[i] = i + 1;
-        }
-
-        list->next_arr[list->capacity] = 0;
-    }
-
-    free (list->data_arr);
-    list->data_arr  = new_data;
-    list->is_sorted = true;
-    return list::OK;
-}
-
-// ----------------------------------------------------------------------------
-
-static bool cringe_get_iter_wrapper (size_t index)
-{
-    char index_str[INDEX_MAX_LEN] = "";
-    bool right_guess = true;
-
-    sprintf (index_str, "%zu", index);
-    size_t index_len = strlen (index_str);
-
-    int right_ans = 0;
-    int user_ans  = 0;
-
-    for (int n = 0; n < NUM_OF_TRIES; ++n)
-    {
-        printf ("Чтобы получить итератор по индексу, вы должны угадать его в этой викторине."
-                "Попытка %d / %d\n", n + 1, NUM_OF_TRIES);
-
-        for (size_t i = 0; i < index_len; ++i)
-        {
-            right_ans = index_str[i] - '0';
-            printf ("%s\nAnswer: ", QUESTIONS[right_ans]);
-
-            scanf ("%d", &user_ans);
-
-            if (user_ans != right_ans)
-            {
-                right_guess = false;
-            }
-
-            if (rand () <= RAND_TRUE_MAX)
-            {
-                i = 0;
-                printf ("Извините, я перепутал ваши ответы, вам придется ответить заново\n\n");
-                right_guess = true;
-            }
-        }
-
-        if (right_guess)
-        {
-            printf ("Ответы верны, индекс найден. Программа продожает исполнение\n");
-            return true;
-        }
-        else
-        {
-            printf ("Извините, ваши ответы неверные. Ah, shit, here we go again\n");
-        }
-    }
-
-    printf ("Позовите кого-нибудь поумнее, пусть он и работает с этой программой\n");
-
-    return false;
+    fprintf (stream, "node_%zu -> node_%zu[color = \"%s\","
+                     "constraint=false];\n", index, (index + 1) % (list->size + 1),
+                     NEXT_EDGE_COLOR);
 }
