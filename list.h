@@ -52,10 +52,8 @@ namespace list
 
     void print_errs (err_flags flags, FILE *file, const char *prefix);
 
-    [[nodiscard ("You lost your index")]]
     ssize_t insert_after (list_t *list, size_t index, const void *elem);
 
-    [[nodiscard ("You lost your index")]]
     ssize_t insert_before (list_t *list, size_t index, const void *elem);
 
     ssize_t push_front (list_t *list, const void *elem);
@@ -64,7 +62,7 @@ namespace list
 
     void get (list_t *list, size_t index, void *elem);
 
-    void pop (list_t *list, size_t index, void *elem);
+    void remove (list_t *list, size_t index, void *elem);
     void pop_back  (list_t *list, void *elem);
     void pop_front (list_t *list, void *elem);
 
@@ -83,7 +81,7 @@ namespace list
     const char *err_to_str (const err_t err);
 
     void dump (const list_t *list, FILE *stream = stdout);
-    void graph_dump (const list::list_t *list);
+    void graph_dump (const list::list_t *list, const char *reason_fmt, ...);
 }
 
 #ifndef NDEBUG

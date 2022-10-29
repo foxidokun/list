@@ -1,5 +1,6 @@
-#include "lib/assert.h"
+#include <assert.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "include/common.h"
 #include "lib/log.h"
@@ -96,7 +97,6 @@ list::err_t list::ctor (list_t *list, size_t obj_size, size_t reserved,
     assert (list != nullptr && "pointer can't be nullptr");
     assert (obj_size > 0 && "Object size can't be less than 1");
     assert (print_func != nullptr && "pointer can't be nullptr");
-    c_assert(0);
 
     //Nuke them
     list->data_arr = nullptr;
@@ -218,13 +218,13 @@ void list::print_errs (list::err_flags flags, FILE *file, const char *prefix)
 
     err_flags tmp_err = 0;
 
-    _PRINT_CASE (OOM,              "Out Of Memory"          );
-    _PRINT_CASE (EMPTY,            "Empty list"             );
-    _PRINT_CASE (NULLPTR,          "List pointer is nullptr");
-    _PRINT_CASE (INVALID_CAPACITY, "Invalid capacity"       );
-    _PRINT_CASE (INVALID_SIZE,     "Invalid size"           );
-    _PRINT_CASE (BROKEN_DATA_LOOP, "Broken data loop"       );
-    _PRINT_CASE (BROKEN_FREE_LOOP, "Broken free loop"       );
+    _PRINT_CASE (OOM,   "Out Of Memory");
+    _PRINT_CASE (EMPTY, "Empty list"   );
+    _PRINT_CASE (NULLPTR, "List pointer is nullptr");
+    _PRINT_CASE (INVALID_CAPACITY, "Invalid capacity");
+    _PRINT_CASE (INVALID_SIZE, "Invalid size");
+    _PRINT_CASE (BROKEN_DATA_LOOP, "Broken data loop");
+    _PRINT_CASE (BROKEN_FREE_LOOP, "Broken free loop");
 
     assert (flags == list::OK && "Unknow error flag");
 }
@@ -306,7 +306,7 @@ void list::get (list_t *list, size_t index, void *elem)
 
 // ----------------------------------------------------------------------------
 
-void list::pop (list_t *list, size_t index, void *elem)
+void list::remove (list_t *list, size_t index, void *elem)
 {
     assert (list != nullptr && "pointer can't be nullptr");
     assert (elem != nullptr && "pointer can't be nullptr");
@@ -330,7 +330,7 @@ void list::pop_front (list_t *list, void *elem)
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
 
-    list::pop (list, list::next (list, 0), elem);
+    list::remove (list, list::next (list, 0), elem);
 }
 
 void list::pop_back (list_t *list, void *elem)
@@ -339,7 +339,7 @@ void list::pop_back (list_t *list, void *elem)
     assert (elem != nullptr && "pointer can't be nullptr");
     list_assert (list);
 
-    list::pop (list, list::prev (list, 0), elem);
+    list::remove (list, list::prev (list, 0), elem);
 }
 
 // ----------------------------------------------------------------------------
@@ -543,7 +543,7 @@ void list::dump (const list::list_t *list, FILE *stream)
 
 // ----------------------------------------------------------------------------
 
-void list::graph_dump (const list::list_t *list)
+void list::graph_dump (const list::list_t *list, const char *reason_fmt, ...)
 {
     assert (list != nullptr && "pointer can't be nullptr");
 
@@ -570,13 +570,20 @@ void list::graph_dump (const list::list_t *list)
         log (log::ERR, "Failed to execute '%s'", cmd);
     }
 
+    va_list args;
+    va_start (args, reason_fmt);
 
     #if HTML_LOGS
-        log (log::INF, "List dump:");
-        log (log::INF, "\n<img src=\"%s.png\">", filepath);
+        fprintf  (get_log_stream(), "<h2>List dump: ");
+        vfprintf (get_log_stream(), reason_fmt, args);
+        fprintf  (get_log_stream(), "</h2>");
+
+        fprintf (get_log_stream(), "\n\n<img src=\"%s.png\">\n\n", filepath);
     #else
         log (log::INF, "Dump path: %s.png", filepath);
     #endif
+
+    va_end (args);
 
     fflush (get_log_stream ());
 }
@@ -853,8 +860,10 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     const char *fillcolor = nullptr;
     const char *color     = nullptr;
 
-    fprintf (stream, "node_main [label = \"STRUCT "
-                    " |  capacity: %zu | obj_size: %zu | is_sorted: %s (%d)"
+    fprintf (get_log_stream(), "\n<hr>\n");
+
+    fprintf (stream, "node_main [label = \" "
+                    "   capacity: %zu | obj_size: %zu | is_sorted: %s (%d)"
                       "| reserved: %zu | size: %zu|<fh>free_head: %zu | <fb> free_back: %zu\"]\n",
                       list->capacity, list->obj_size, list->is_sorted ? "true" : "false", list->is_sorted,
                       list->reserved, list->size, list->free_head, list->free_back);
@@ -863,10 +872,16 @@ static void generate_graphiz_code (const list::list_t *list, FILE *stream)
     fprintf (stream, "node_main:fh -> node_%zu [style=\"dotted\", color = \"skyblue\"]", list->free_head);
     fprintf (stream, "node_main    -> node_0   [style=\"invis\", weight=100]");
 
+    fprintf (stream, "node_ind_struct [label=\"STRUCT\", fillcolor=\"white\"]\n");
+    fprintf (stream, "node_ind_struct -> node_ind_0 [style=\"invis\", weight = 100]\n");
+
+
     for (size_t i = 0; i < list->capacity +1; ++i)
     {
         // Set colors
         set_colors (list, i, &fillcolor, &color);
+
+        fprintf (stream, "node_ind_%zu [label=\"%zu\", fillcolor=\"white\"]", i, i);
 
         // Print node
         node_codegen (list, i, fillcolor, color, stream);
@@ -923,7 +938,7 @@ static void node_codegen (const list::list_t *list, size_t index, const char *fi
 
     if (is_free)
     {
-        fprintf (stream, "node_%zu [label = \"FREE | { FREE", index);
+        fprintf (stream, "node_%zu [label = \"FREE | FREE", index);
     }
     else
     {
@@ -936,11 +951,11 @@ static void node_codegen (const list::list_t *list, size_t index, const char *fi
         {
             fprintf (stream, "nil"); 
         }
-        fprintf (stream, "| { p: %zu", list->prev_arr[index]);
+        fprintf (stream, "| p: %zu", list->prev_arr[index]);
     }
     
-    fprintf (stream, "| i: %zu| <next> n: %zu", index, list->next_arr[index]);
-    fprintf (stream, "}\"fillcolor=\"%s\", color=\"%s\"];\n",
+    fprintf (stream, "| <next> n: %zu", list->next_arr[index]);
+    fprintf (stream, "\"fillcolor=\"%s\", color=\"%s\"];\n",
                          fillcolor, color);
 }
 
@@ -957,7 +972,9 @@ static void edge_codegen (const list::list_t *list, size_t index, FILE *stream)
     // Invisible edge
     if (index < list->capacity)
     {
-        fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 100]",
+        fprintf (stream, "node_%zu->node_%zu [style=invis, weight = 60]\n",
+                    index, index+1);
+        fprintf (stream, "node_ind_%zu->node_ind_%zu [style=invis, weight = 100]\n",
                     index, index+1);
     }
 

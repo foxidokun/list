@@ -25,7 +25,7 @@
                         "Condition check failed: %s\n"          \
                         "Test location: File: %s Line: %d",     \
                         __func__, #cond, __FILE__, __LINE__);   \
-        list::graph_dump (&list);                               \
+        list::graph_dump (&list, "Test failure");               \
         return -1;                                              \
     }                                                           \
 }
@@ -103,7 +103,7 @@ int test_push_pop ()
     val = 0;
     list::pop_front (&list, &val);
     _ASSERT (val == 3);
-    list::pop (&list, index, &val);
+    list::remove (&list, index, &val);
     _ASSERT (val == 1);
     list::pop_back (&list, &val);
     _ASSERT (val == 2);
