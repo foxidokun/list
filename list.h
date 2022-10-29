@@ -9,7 +9,6 @@
 
 namespace list
 {
-
     struct node_t
     {
         void   *value;
@@ -63,7 +62,7 @@ namespace list
 
     void get (list_t *list, iter_t index, void *elem);
 
-    void remove (list_t *list, iter_t index, void *elem);
+    void remove    (list_t *list, iter_t index, void *elem);
     void pop_back  (list_t *list, void *elem);
     void pop_front (list_t *list, void *elem);
 

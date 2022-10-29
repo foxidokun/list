@@ -128,10 +128,10 @@ void list::dtor (list_t *list)
     }
 
     node_t *next_node = list->null_node;
+
     for (size_t i = 0; i < list->size; ++i)
     {
         next_node = next_node->next;
-
         free (next_node->prev);
     }
 
