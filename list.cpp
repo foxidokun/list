@@ -571,6 +571,8 @@ static void node_codegen (const list::list_t *list, list::iter_t iter, size_t in
     {
         fprintf (stream, "nil"); 
     }
+
+    fprintf (stream, "| %p", iter);
     fprintf (stream, "\"fillcolor=\"%s\", color=\"%s\"];\n",
                          fillcolor, color);
 }
