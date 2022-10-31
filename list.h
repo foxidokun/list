@@ -47,6 +47,9 @@ namespace list
 
     void dtor (list_t *list);
 
+    node_t *node_new (const void *elem, size_t obj_size);
+    void node_delete (node_t *node);
+
     [[nodiscard]]
     err_flags verify (const list_t *list);
 

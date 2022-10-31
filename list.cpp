@@ -138,6 +138,26 @@ void list::dtor (list_t *list)
 
 // ----------------------------------------------------------------------------
 
+list::node_t *list::node_new (const void *elem, size_t obj_size)
+{
+    assert (elem != nullptr && "pointer can't be null");
+
+    node_t *new_cell = (node_t *) calloc (sizeof (node_t) + obj_size, 1);
+    memcpy (new_cell+1, elem, obj_size);
+    new_cell->value = new_cell + 1;
+
+    return new_cell;
+}
+
+// ----------------------------------------------------------------------------
+
+void list::node_delete (node_t *node)
+{
+    free (node);
+}
+
+// ----------------------------------------------------------------------------
+
 list::err_flags list::verify (const list_t *list)
 {
     if (list == nullptr)
@@ -200,12 +220,8 @@ list::iter_t list::insert_after (list_t *list, iter_t cur_cell, const void *elem
     list_assert (list);
 
     // Find free cell
-    node_t *new_cell = (node_t *) calloc (sizeof (node_t) + list->obj_size, 1);
+    node_t *new_cell = node_new (elem, list->obj_size);
     if (new_cell == nullptr) return nullptr;
-    
-    // Copy data
-    memcpy (new_cell+1, elem, list->obj_size);
-    new_cell->value = new_cell + 1;
 
     // Update pointers
     cur_cell->next->prev = new_cell;
@@ -268,7 +284,8 @@ void list::remove (list_t *list, iter_t index, void *elem)
     list::get (list, index, elem);
     index->prev->next = index->next;
     index->next->prev = index->prev;
-    free (index);
+    
+    node_delete (index);
 
     list->size--;
 }
