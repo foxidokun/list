@@ -59,8 +59,6 @@ const int NUM_OF_TRIES  = 3;
     }                         \
 }
 
-static list::err_t recalloc_no_sorting  (list::list_t *list, size_t new_capacity);
-
 static bool check_cell  (const list::list_t *list, list::iter_t index);
 static void verify_data_loop  (const list::list_t *list, list::err_flags *flags);
 
